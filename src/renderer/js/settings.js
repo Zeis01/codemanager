@@ -7,6 +7,9 @@ App.views.settings = {
     const s = App.state.settings;
     const info = await api('app:info');
     el.innerHTML = `<div class="head"><div class="grow"><h1>Ustawienia</h1></div></div>
+      <div class="panel" style="margin-bottom:12px"><div class="panel-head"><h2>Wygląd</h2><button class="btn sm" data-timport>${icon('import')}Importuj motyw…</button><button class="btn sm" data-tsave>${icon('save')}Zapisz bieżący jako plik</button><button class="btn sm" data-tdir>${icon('folder')}Folder motywów</button></div>
+        <div class="themes" data-themes></div><div data-terr></div>
+        <p class="dim" style="font-size:12px;margin:10px 0 0">Własne motywy to pliki <span class="mono">nazwa.theme.json</span> w folderze motywów (opis formatu w pliku README.txt). Zmiany w plikach są widoczne od razu po zapisaniu.</p></div>
       <div class="grid two" style="align-items:start">
         <div class="panel">
           <h2 style="margin-bottom:14px">Ścieżki</h2>
@@ -32,6 +35,32 @@ App.views.settings = {
           <p class="dim" style="font-size:12.5px;margin:14px 0 0">Kopie zapasowe plików nadpisanych przez instalatory trafiają do podfolderu <span class="mono">backups</span>.</p>
         </div>
       </div>`;
+    const drawThemes = () => {
+      const box = $('[data-themes]', el); box.innerHTML = '';
+      const opts = [...Object.entries(Themes.BUILTIN).map(([k, t]) => ({ id: 'builtin:' + k, theme: t, src: 'Wbudowany' })), ...App.themeFiles.map(f => ({ id: f.id, theme: f.theme, src: f.file, error: f.error }))];
+      for (const o of opts) {
+        const r = o.theme ? Themes.resolve(o.theme, Object.fromEntries(App.themeFiles.filter(f => f.theme).map(f => [f.file.replace(/\.theme\.json$/i, ''), f]))) : null;
+        const c = r ? r.colors : null;
+        const b = App.h(`<button class="theme-opt ${App.state.themeId === o.id ? 'sel' : ''}" ${o.error ? 'disabled' : ''} title="${esc(o.error || '')}">
+          <div class="pv">${c ? `<i style="background:${c.sidebar || c.bg0}"></i><span class="c" style="background:${c.bg1}"><b style="background:${c.bg3};width:70%"></b><b style="background:${c.text3};width:50%;opacity:.6"></b><b style="background:${c.accentStrong};width:34%;margin-top:auto;height:9px"></b></span>` : '<i style="background:var(--error-soft);grid-column:1/3"></i>'}</div>
+          <div class="nm">${esc(r ? r.name : o.src)}</div><div class="src">${esc(o.error ? 'Błąd w pliku' : o.src)}</div></button>`);
+        b.onclick = async () => { App.applyTheme(o.id); await api('themes:select', o.id); drawThemes(); };
+        box.appendChild(b);
+      }
+      const errs = App.themeFiles.filter(f => f.error).map(f => `${f.file}: ${f.error}`).concat((App.state.themeWarnings || []).map(w => 'Bieżący motyw: ' + w));
+      $('[data-terr]', el).innerHTML = errs.map(e => `<div class="theme-err">${esc(e)}</div>`).join('');
+    };
+    drawThemes();
+    App.onThemesChanged = () => { if (App.current() === 'settings') drawThemes(); };
+    $('[data-tdir]', el).onclick = () => api('themes:folder');
+    $('[data-timport]', el).onclick = async () => { const f = (await api('dialog:files', 'Wybierz plik motywu', [{ name: 'Motyw', extensions: ['json'] }]))[0]; if (!f) return; const id = await api('themes:import', f); await App.loadThemes(); App.applyTheme(id); await api('themes:select', id); drawThemes(); toast('Zaimportowano motyw'); };
+    $('[data-tsave]', el).onclick = async () => {
+      const n = await App.promptBox('Zapisz motyw jako plik', 'Nazwa motywu', 'Mój motyw'); if (!n) return;
+      const cur = Themes.current();
+      const r = await api('themes:save', n, { name: n, type: cur.type, colors: cur.colors, radius: cur.radius, fonts: cur.fonts });
+      await App.loadThemes(); App.applyTheme(r.id); await api('themes:select', r.id); drawThemes();
+      toast('Zapisano – plik możesz edytować w folderze motywów'); api('shell:show', r.path);
+    };
     $$('[data-b]', el).forEach(b => b.onclick = async () => { const p = await api('dialog:folder'); if (p) $(`[data-k="${b.dataset.b}"]`, el).value = p; });
     $('[data-ud]', el).onclick = () => api('shell:open', info.userData);
     $('[data-java]', el).onclick = async () => {

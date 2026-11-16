@@ -11,7 +11,7 @@ Ze źródeł (wymaga Node.js 20+):
 ```
 npm install
 npm start          # uruchomienie
-npm test           # 62 testy: parsery, checkery, funkcje 1.1 i updater
+npm test           # 71 testów: parsery, checkery, funkcje 1.1 i updater
 npm run dist       # instalator, portable i zip (bez publikacji)
 npm run release    # to samo + publikacja wydania na GitHub (GH_TOKEN)
 ```
@@ -45,6 +45,13 @@ Pominięte celowo: **Brick Rigs** i **Ready or Not** – ich mody nie mają meta
 **Serwery** – Minecraft (Paper, Purpur, Vanilla, Fabric, Quilt, Forge, NeoForge), Arma Reforger, Rust, CS2, DayZ, FiveM, MTA, Terraria (TShock), Valheim, Project Zomboid, Team Fortress 2, BeamMP. Instalacja przez SteamCMD lub oficjalne API, konsola na żywo z wysyłaniem poleceń, aktualizacje, frameworki pluginów (Oxide, Carbon, Metamod, CounterStrikeSharp, SourceMod, BepInExPack Valheim) i sprawdzanie zgodności pluginów/modów/zasobów.
 
 **Edytor** – Monaco (silnik VS Code): drzewo plików, zakładki, wyszukiwanie w plikach, szybkie otwieranie (Ctrl+P), podświetlanie Lua, JSON, TOML, YAML, XML, C#, SourcePawn, Enforce Script (DayZ/Reforger), SQF, Paradox, SII, KeyValues (gameinfo.gi), cfg serwerów, mcfunction i logów; snippety i szablony plików dla każdej gry.
+
+## Wygląd i motywy (1.3)
+
+- Domyślny motyw **Klasyczny**: szare tło i zielone wyróżnienia. Wbudowane są też: Grafit, Jasny, Nocny, Leśny i Wysoki kontrast (Ustawienia → Wygląd).
+- **Własne motywy**: pliki `nazwa.theme.json` w folderze motywów (przycisk „Folder motywów”). Wystarczy podać kolory do zmiany – reszta pochodzi z motywu bazowego (`"extends"`). Zmiany są widoczne od razu po zapisaniu pliku. Opis wszystkich kluczy jest w `README.txt` w folderze motywów, a przykład w `czerwony.theme.json`.
+- **Ikony gier** są pobierane z pamięci podręcznej biblioteki Steam, z pliku .exe gry albo (gdy gra nie jest zainstalowana, np. dla serwerów) z grafik Steam, które są zapisywane lokalnie.
+- Plik .exe i instalator mają ikonę taką jak w aplikacji.
 
 ## Aktualizacje z GitHub (1.2)
 

@@ -23,29 +23,7 @@ window.EditorLangs = (function () {
   }
 
   function register(monaco) {
-    // ---- motyw ----
-    monaco.editor.defineTheme('codemanager', {
-      base: 'vs-dark', inherit: true,
-      rules: [
-        { token: 'comment', foreground: '5f8a72', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '7ee2a8' }, { token: 'keyword.control', foreground: '7ee2a8' },
-        { token: 'string', foreground: 'e7c27a' }, { token: 'string.key.json', foreground: '9fd3c7' }, { token: 'string.value.json', foreground: 'e7c27a' },
-        { token: 'number', foreground: 'f0a17a' }, { token: 'type', foreground: '79c6e8' }, { token: 'type.identifier', foreground: '79c6e8' },
-        { token: 'function', foreground: 'b8e3a0' }, { token: 'variable', foreground: 'dce9e0' }, { token: 'constant', foreground: 'f0a17a' },
-        { token: 'tag', foreground: '7ee2a8' }, { token: 'attribute.name', foreground: '9fd3c7' }, { token: 'attribute.value', foreground: 'e7c27a' },
-        { token: 'key', foreground: '9fd3c7' }, { token: 'operator', foreground: 'a9c4b4' }, { token: 'delimiter', foreground: '8fae9b' },
-        { token: 'log.error', foreground: 'ee6c5e' }, { token: 'log.warn', foreground: 'e7b24c' }, { token: 'log.info', foreground: '6cb6d9' }, { token: 'log.date', foreground: '5f8a72' },
-      ],
-      colors: {
-        'editor.background': '#0f1d16', 'editor.foreground': '#dce9e0', 'editorLineNumber.foreground': '#3c5e4b', 'editorLineNumber.activeForeground': '#8fae9b',
-        'editor.lineHighlightBackground': '#14261d', 'editor.selectionBackground': '#2a5a40', 'editor.inactiveSelectionBackground': '#1f4030',
-        'editorCursor.foreground': '#4fd18b', 'editorIndentGuide.background1': '#1c3327', 'editorIndentGuide.activeBackground1': '#2f553f',
-        'editorWidget.background': '#14261d', 'editorWidget.border': '#244131', 'editorSuggestWidget.background': '#14261d', 'editorSuggestWidget.selectedBackground': '#244131',
-        'editorHoverWidget.background': '#14261d', 'minimap.background': '#0e1b15', 'scrollbarSlider.background': '#24413180', 'scrollbarSlider.hoverBackground': '#2f553fa0',
-        'editorBracketMatch.background': '#2a5a4066', 'editorBracketMatch.border': '#4fd18b', 'editorGutter.background': '#0f1d16', 'input.background': '#0a1510', 'focusBorder': '#4fd18b',
-      },
-    });
-
+    // motyw edytora ustawia js/themes.js (Themes.applyMonaco)
     const reg = (id, def, conf) => { monaco.languages.register({ id }); monaco.languages.setMonarchTokensProvider(id, def); if (conf) monaco.languages.setLanguageConfiguration(id, conf); };
     const cLike = { comments: { lineComment: '//', blockComment: ['/*', '*/'] }, brackets: [['{', '}'], ['[', ']'], ['(', ')']], autoClosingPairs: [{ open: '{', close: '}' }, { open: '[', close: ']' }, { open: '(', close: ')' }, { open: '"', close: '"' }] };
 

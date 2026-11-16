@@ -1,61 +1,60 @@
-// Pulpit
+// Przegląd
 'use strict';
 App.views = App.views || {};
 App.views.dashboard = {
+  crumb: () => '<b>Przegląd</b>',
   render(el) {
-    const { h, icon, esc, gameBadge } = App;
+    const { h, $, icon, esc, gameBadge, api } = App;
     const st = App.state;
     const det = st.detected;
-    const found = det ? Object.entries(det.games).filter(([, g]) => g.found) : [];
+    const found = det ? st.defs.games.filter(g => det.games[g.id] && det.games[g.id].found) : [];
     const running = st.servers.filter(s => s.status === 'running');
     const reports = Object.values(st.reports);
     const errs = reports.reduce((a, r) => a + (r.counts ? r.counts.error : 0), 0);
+    const checked = reports.length;
     el.innerHTML = `
-      <div class="dash-hero">
-        <div class="welcome">
-          <svg class="rings" viewBox="0 0 200 200" fill="none" stroke="#4fd18b" stroke-width="1">
-            <circle cx="100" cy="100" r="96" opacity=".18"/><circle cx="100" cy="100" r="74" opacity=".26"/><circle cx="100" cy="100" r="52" opacity=".34"/><circle cx="100" cy="100" r="30" opacity=".5"/>
-          </svg>
-          <h1>Mody, serwery i konfiguracje w jednym miejscu</h1>
-          <p class="lead">CodeManager wykrywa Twoje gry, sprawdza, czy mody do siebie pasują, i stawia serwery jednym kliknięciem.</p>
-          <div class="row">
-            <button class="btn primary" data-go="games">${icon('shield')}Sprawdź zgodność modów</button>
-            <button class="btn" data-go="servers">${icon('plus')}Nowy serwer</button>
-          </div>
-        </div>
-        <div class="stat-col">
-          <div class="stat"><div class="big">${det ? found.length : '…'}</div><div><div>Wykryte gry</div><div class="lbl">${det ? `z ${st.defs.games.length} obsługiwanych` : 'Szukam w bibliotekach Steam i na dyskach…'}</div></div></div>
-          <div class="stat"><div class="big" style="color:${running.length ? 'var(--jade)' : 'inherit'}">${running.length}<span class="muted" style="font-size:20px">/${st.servers.length}</span></div><div><div>Serwery online</div><div class="lbl">${st.servers.length ? 'Kliknij Serwery, aby zarządzać' : 'Nie masz jeszcze serwerów'}</div></div></div>
-        </div>
+      <div class="head"><div class="grow"><h1>Przegląd</h1></div>
+        <div class="row"><button class="btn" data-detect>${icon('refresh')}Wykryj gry</button><button class="btn" data-go="servers">${icon('plus')}Nowy serwer</button></div></div>
+      <div class="kv">
+        <div><div class="v">${det ? found.length : '…'}</div><div class="k">wykrytych gier z ${st.defs.games.length}</div></div>
+        <div><div class="v">${running.length} / ${st.servers.length}</div><div class="k">serwerów działa</div></div>
+        <div><div class="v" style="${errs ? 'color:var(--error)' : ''}">${checked ? errs : '–'}</div><div class="k">${checked ? `błędów zgodności (${checked} sprawdzonych gier)` : 'gry nie były sprawdzane'}</div></div>
+        <div><div class="v">${esc((st.update && st.update.current) || '')}</div><div class="k">${st.update && st.update.state === 'available' ? `dostępna wersja ${esc(st.update.latest)}` : 'wersja programu'}</div></div>
       </div>
-      <div class="grid two">
-        <div class="panel">
-          <div class="row" style="margin-bottom:12px"><h2 style="flex:1">Twoje gry</h2><button class="btn sm ghost" data-go="games">Wszystkie</button></div>
-          <div data-games></div>
-        </div>
-        <div class="panel">
-          <h2 style="margin-bottom:8px">Szybkie akcje</h2>
-          <div class="quick">
-            <button data-go="installers">${icon('download')}<span>Zainstaluj modloader<small>BepInEx, MelonLoader, RedLoader, Fabric, Forge, NeoForge, Quilt</small></span></button>
-            <button data-go="servers">${icon('server')}<span>Postaw serwer<small>Minecraft, Rust, CS2, DayZ, FiveM, Palworld, ARK i 11 innych</small></span></button>
-            <button data-go="editor">${icon('code')}<span>Edytuj konfigurację<small>Edytor z podświetlaniem Lua, SQF, SourcePawn, Paradox, TOML…</small></span></button>
-            <button data-detect>${icon('refresh')}<span>Wykryj gry ponownie<small>Przeszukaj biblioteki Steam, Epic i launchery Minecrafta</small></span></button>
-          </div>
-          ${errs ? `<div class="note warn" style="margin-top:12px">Ostatnie sprawdzenia znalazły ${errs} błędów zgodności.</div>` : ''}
+      <div class="overview">
+        <div class="panel flush"><div class="panel-head"><h2>Gry</h2><button class="btn sm ghost" data-go="games">Wszystkie</button></div>
+          <table class="table"><thead><tr><th class="ic-cell"></th><th>Nazwa</th><th>Źródło</th><th>Mody</th><th>Stan</th></tr></thead><tbody data-games></tbody></table></div>
+        <div>
+          <div class="panel flush"><div class="panel-head"><h2>Serwery</h2><button class="btn sm ghost" data-go="servers">Zarządzaj</button></div>
+            <table class="table"><thead><tr><th class="ic-cell"></th><th>Nazwa</th><th>Stan</th><th>Port</th></tr></thead><tbody data-servers></tbody></table></div>
+          <div class="panel flush" style="margin-top:12px"><div class="panel-head"><h2>Narzędzia</h2></div>
+            <div class="linklist">
+              <button data-go="analyzer">${icon('pulse')}<span>Analizator błędów<small>Wyjaśnia, dlaczego gra lub serwer się wyłącza</small></span></button>
+              <button data-go="installers">${icon('download')}<span>Instalatory<small>BepInEx, MelonLoader, RedLoader, Fabric, Forge, NeoForge, Quilt</small></span></button>
+              <button data-go="editor">${icon('code')}<span>Edytor plików<small>Konfiguracje i skrypty z podświetlaniem składni</small></span></button>
+              <button data-go="rcon">${icon('terminal')}<span>Konsola RCON<small>Polecenia dla serwerów lokalnych i zdalnych</small></span></button>
+            </div></div>
         </div>
       </div>`;
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => App.go(b.dataset.go));
-    el.querySelector('[data-detect]').onclick = async () => { App.toast('Wykrywanie gier…', 'ok', 2000); App.state.detected = await App.api('games:detect'); App.renderRail(); App.refreshCurrent(); };
-    const gl = el.querySelector('[data-games]');
-    if (!det) { gl.innerHTML = '<div class="progress indet"><i></i></div>'; return; }
-    if (!found.length) { gl.innerHTML = `<div class="empty" style="padding:20px"><p>Nie znaleziono żadnej z obsługiwanych gier.</p><button class="btn" data-go2>Wskaż folder gry</button></div>`; gl.querySelector('[data-go2]').onclick = () => App.go('games'); return; }
-    for (const [id] of found.slice(0, 7)) {
-      const g = st.defs.games.find(x => x.id === id);
-      const rep = st.reports[id];
-      const row = h(`<button class="quick-row" style="display:flex;gap:12px;align-items:center;width:100%;background:none;border:0;padding:8px;border-radius:9px;cursor:pointer;text-align:left;color:inherit">${gameBadge(g, 32)}<div style="flex:1;min-width:0"><div style="font-weight:500">${esc(g.name)}</div><div class="dim" style="font-size:12px">${rep ? `${rep.mods.length} modów · ${rep.counts.error} błędów` : 'Nie sprawdzono'}</div></div>${rep ? `<div style="width:90px">${App.healthBar(rep.mods)}</div>` : ''}</button>`);
-      row.onmouseenter = () => row.style.background = 'var(--pine-800)'; row.onmouseleave = () => row.style.background = 'none';
-      row.onclick = () => App.go('games', { id });
-      gl.appendChild(row);
+    $('[data-detect]', el).onclick = async e => { e.currentTarget.disabled = true; App.state.detected = await api('games:detect'); App.renderRail(); App.loadIcons(); App.refreshCurrent(); };
+    const gt = $('[data-games]', el);
+    if (!det) gt.innerHTML = '<tr><td colspan="5" class="muted">Wyszukiwanie gier…</td></tr>';
+    else if (!found.length) gt.innerHTML = '<tr><td colspan="5" class="muted">Nie wykryto obsługiwanych gier. Otwórz „Znalezione gry”, aby wskazać folder ręcznie.</td></tr>';
+    for (const g of found) {
+      const info = det.games[g.id]; const rep = st.reports[g.id];
+      const stan = !rep ? '<span class="dim">nie sprawdzono</span>' : rep.counts.error ? `<span class="chip error">${App.plural(rep.counts.error, 'błąd', 'błędy', 'błędów')}</span>` : rep.counts.warn ? `<span class="chip warn">${App.plural(rep.counts.warn, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')}</span>` : '<span class="chip ok">zgodne</span>';
+      const tr = h(`<tr style="cursor:pointer"><td class="ic-cell">${gameBadge(g)}</td><td class="nm">${esc(g.name)}</td><td class="muted">${esc(g.id === 'minecraft' ? `${info.instances.length} inst.` : info.source)}</td><td>${rep ? rep.mods.length : '<span class="dim">–</span>'}</td><td>${stan}</td></tr>`);
+      tr.onclick = () => App.go('games', { id: g.id });
+      gt.appendChild(tr);
+    }
+    const STATUS = { running: 'działa', stopped: 'zatrzymany', installing: 'instalacja…', stopping: 'zatrzymywanie…', error: 'błąd' };
+    const sv = $('[data-servers]', el);
+    if (!st.servers.length) sv.innerHTML = '<tr><td colspan="4" class="muted">Brak serwerów. Kliknij „Nowy serwer”, aby utworzyć pierwszy.</td></tr>';
+    for (const s of st.servers) {
+      const tr = h(`<tr style="cursor:pointer"><td class="ic-cell">${gameBadge({ color: s.color, short: (App.SRV_SHORT || {})[s.type] || '?', name: s.typeName || '', iconData: st.icons && st.icons.servers && st.icons.servers[s.type] })}</td><td><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.typeName || '')}</div></td><td><span class="row" style="gap:6px"><span class="dot ${s.status}"></span>${STATUS[s.status] || s.status}</span></td><td class="mono">${s.port}</td></tr>`);
+      tr.onclick = () => App.go('servers', { id: s.id });
+      sv.appendChild(tr);
     }
   },
 };

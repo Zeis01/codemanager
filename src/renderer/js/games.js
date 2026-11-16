@@ -22,7 +22,7 @@ App.views = App.views || {};
       <div data-body></div>`;
     $('[data-detect]', el).onclick = async e => {
       const b = e.currentTarget; b.disabled = true; b.innerHTML = icon('refresh', 'spin') + 'Wykrywanie…';
-      try { App.state.detected = await api('games:detect'); toast('Wykrywanie zakończone'); } finally { App.renderRail(); renderList(el); }
+      try { App.state.detected = await api('games:detect'); toast('Wykrywanie zakończone'); App.loadIcons(); } finally { App.renderRail(); renderList(el); }
     };
     $('[data-addmc]', el).onclick = addMcInstance;
     $('[data-import]', el).onclick = importDialog;
@@ -106,7 +106,7 @@ App.views = App.views || {};
     let tab = params.tab || 'mods';
     el.innerHTML = `
       <button class="back" data-back>${icon('back')}Znalezione gry</button>
-      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)}</h1><p class="lead" style="margin-top:4px">${esc(g.desc)}</p></div></div>
+      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)}</h1><p class="lead" style="margin-top:2px">${esc(g.desc)}</p></div>${App.state.icons && App.state.icons.games[g.id] && App.state.icons.games[g.id].header ? `<img class="cover" src="${esc(App.state.icons.games[g.id].header)}" alt="">` : ''}</div>
       ${profiles.length > 1 || g.id === 'minecraft' ? `<div class="profile-bar"><label class="muted" for="prof">${g.id === 'minecraft' ? 'Instancja' : 'Profil'}</label><select class="input" id="prof">${profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.mcVersion ? ` – ${esc(p.mcVersion)} ${esc(p.loader || '')}` : ''}</option>`).join('')}</select><span class="path" data-ppath></span></div>` : ''}
       <div class="tabs" role="tablist">
         <button data-tab="mods">Mody</button><button data-tab="compat">Zgodność</button><button data-tab="get">Pobierz mody</button>

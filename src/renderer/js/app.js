@@ -3,7 +3,7 @@
 (function () {
   const { h, $, icon, api, esc } = App;
   const NAV = [
-    { id: 'dashboard', label: 'Pulpit', icon: 'home' },
+    { id: 'dashboard', label: 'Przegląd', icon: 'home' },
     { id: 'games', label: 'Znalezione gry', icon: 'games', count: () => { const d = App.state.detected; return d ? Object.values(d.games).filter(g => g.found).length : ''; } },
     { id: 'servers', label: 'Serwery', icon: 'server', count: () => { const r = App.state.servers.filter(s => s.status === 'running').length; return r ? { v: r + ' online', live: true } : (App.state.servers.length || ''); } },
     { id: 'analyzer', label: 'Analizator błędów', icon: 'pulse' },
@@ -48,6 +48,30 @@
     view.render(el, params);
   };
   App.refreshCurrent = () => App.go(current, currentParams);
+  App.loadIcons = async () => {
+    try { App.state.icons = await window.cm.call('icons:all'); if (['dashboard', 'games', 'servers', 'installers'].includes(current)) App.refreshCurrent(); } catch { /* ikony są opcjonalne */ }
+  };
+  // ---- motywy ----
+  App.themeFiles = [];
+  App.themeById = id => {
+    if (!id || id.startsWith('builtin:')) { const k = (id || 'builtin:classic').slice(8); return Themes.BUILTIN[k] ? { id: 'builtin:' + k, theme: Themes.BUILTIN[k] } : { id: 'builtin:classic', theme: Themes.BUILTIN.classic }; }
+    const f = App.themeFiles.find(x => x.id === id);
+    return f && f.theme ? { id, theme: f.theme, file: f } : null;
+  };
+  App.applyTheme = id => {
+    const found = App.themeById(id) || App.themeById('builtin:classic');
+    const customs = Object.fromEntries(App.themeFiles.filter(f => f.theme).map(f => [f.file.replace(/\.theme\.json$/i, ''), f]));
+    const r = Themes.resolve(found.theme, customs);
+    Themes.apply(r);
+    App.state.themeId = found.id; App.state.themeWarnings = r.warnings;
+    return r;
+  };
+  App.loadThemes = async () => {
+    const r = await window.cm.call('themes:list');
+    App.themeFiles = r.files; App.state.themeDir = r.dir;
+    App.applyTheme(r.selected);
+    return r;
+  };
   App.updateStatusText = c => {
     switch (c.state) {
       case 'checking': return { title: 'Sprawdzanie…', sub: 'Łączenie z GitHub' };
@@ -78,6 +102,8 @@
     $('#wMin').onclick = () => api('win:minimize');
     $('#wMax').onclick = () => api('win:maximize');
     $('#wClose').onclick = () => api('win:close');
+    await App.loadThemes().catch(() => App.applyTheme('builtin:classic'));
+    window.cm.on('themes:changed', files => { App.themeFiles = files; App.applyTheme(App.state.themeId); if (App.onThemesChanged) App.onThemesChanged(); });
     const [defs, cfg] = await Promise.all([api('games:defs'), api('config:get')]);
     App.state.defs = defs; App.state.settings = cfg.settings; App.state.gameConfig = cfg.games;
     App.state.servers = await api('servers:list');
@@ -106,6 +132,7 @@
     try {
       App.state.detected = await window.cm.call('games:detected');
       renderRail();
+      App.loadIcons();
       if (current === 'dashboard' || current === 'games') App.refreshCurrent();
     } catch (e) { App.toast('Wykrywanie gier nie powiodło się: ' + e.message, 'error'); }
   }

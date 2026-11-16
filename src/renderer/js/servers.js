@@ -7,7 +7,8 @@ App.views = App.views || {};
   const STATUS = { running: 'Działa', stopped: 'Zatrzymany', installing: 'Instalowanie…', stopping: 'Zatrzymywanie…', error: 'Błąd', starting: 'Uruchamianie…' };
   const SHORT = { minecraft: 'MC', rust: 'RUST', cs2: 'CS2', dayz: 'DZ', valheim: 'VH', projectzomboid: 'PZ', tf2: 'TF2', armareforger: 'AR', terraria: 'TS', fivem: '5M', mta: 'MTA', beammp: 'BMP', palworld: 'PAL', ark: 'ARK', satisfactory: 'SAT', enshrouded: 'ENS', spaceengineers: 'SE', mcproxy: 'PRX' };
   App.SRV_SHORT = SHORT;
-  const badge = s => gameBadge({ color: s.color, short: SHORT[s.type], name: s.typeName || '' });
+  const srvIcon = t => App.state.icons && App.state.icons.servers && App.state.icons.servers[t];
+  const badge = s => gameBadge({ color: s.color, short: SHORT[s.type], name: s.typeName || '', iconData: srvIcon(s.type) });
 
   async function loadTypes() { if (!types) types = await api('servers:types'); return types; }
   async function refreshList() { App.state.servers = await api('servers:list'); App.renderRail(); }
@@ -50,7 +51,7 @@ App.views = App.views || {};
     await loadTypes();
     let sel = null;
     const body = h(`<div>
-      <div class="field"><label>Gra</label><div class="type-grid">${types.map(t => `<button class="type-opt" data-t="${t.id}">${gameBadge({ color: t.color, short: SHORT[t.id], name: t.name })}<span>${esc(t.name)}</span></button>`).join('')}</div></div>
+      <div class="field"><label>Gra</label><div class="type-grid">${types.map(t => `<button class="type-opt" data-t="${t.id}">${gameBadge({ color: t.color, short: SHORT[t.id], name: t.name, iconData: srvIcon(t.id) })}<span>${esc(t.name)}</span></button>`).join('')}</div></div>
       <div data-form></div></div>`);
     const form = $('[data-form]', body);
     const pick = async id => {

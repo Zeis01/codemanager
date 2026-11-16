@@ -532,3 +532,32 @@ handle('update:configure', o => {
   return updateConfig();
 });
 handle('update:config', updateConfig);
+
+// =====================================================================
+// Motywy
+// =====================================================================
+const { ThemeStore } = require('./themes');
+const themeStore = new ThemeStore(userData, emit);
+handle('themes:list', () => ({ dir: themeStore.dir, files: themeStore.list(), selected: config.settings.theme || 'builtin:classic' }));
+handle('themes:select', id => { config.settings.theme = id; saveConfig(); return id; });
+handle('themes:import', src => themeStore.import(src));
+handle('themes:save', (name, theme) => themeStore.save(name, theme));
+handle('themes:folder', () => shell.openPath(themeStore.dir));
+
+// =====================================================================
+// Ikony gier
+// =====================================================================
+const { Icons } = require('./icons');
+let steamRootsCache = [];
+const icons = new Icons({ app, userData, getSteamRoots: () => steamRootsCache });
+handle('icons:all', async () => {
+  try { steamRootsCache = (await detect.steamApps(config.settings.steamPath)).roots || []; } catch { steamRootsCache = []; }
+  const online = config.settings.onlineIcons !== false;
+  const games = {};
+  for (const g of GAMES) {
+    try { games[g.id] = await icons.forGame(g, detected && detected.games[g.id], { online }); } catch { games[g.id] = {}; }
+  }
+  const servers = {};
+  for (const t of Object.keys(STYPES)) { try { servers[t] = await icons.forServerType(t, games, { online }); } catch { servers[t] = {}; } }
+  return { games, servers };
+});

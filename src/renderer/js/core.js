@@ -127,7 +127,21 @@ function jobModal(title) {
   };
 }
 
-function gameBadge(g, size) { const sh = g.short || g.name.slice(0, 2); return `<div class="badge-game ${sh.length > 3 ? 'long' : ''}" style="background:${g.color || '#4fd18b'}${size ? `;width:${size}px;height:${size}px` : ''}">${esc(g.short || g.name.slice(0, 2))}</div>`; }
+function gameBadge(g, size) {
+  const sh = g.short || (g.name || '?').slice(0, 2);
+  const dim = size ? `width:${size}px;height:${size}px;` : '';
+  const ic = g.iconData || (App.state.icons && App.state.icons.games && App.state.icons.games[g.id]);
+  const src = ic && (ic.icon || ic.iconCover);
+  if (src) return `<div class="badge-game img" data-fb="${esc(sh)}" data-color="${esc(g.color || '')}" style="${dim}"><img src="${esc(src)}" alt="" draggable="false"></div>`;
+  return `<div class="badge-game ${sh.length > 3 ? 'long' : ''}" style="background:${g.color || 'var(--accent-strong)'};${dim}">${esc(sh)}</div>`;
+}
+// nieudane wczytanie ikony → litery na kolorowym tle
+document.addEventListener('error', e => {
+  const img = e.target; if (!img || img.tagName !== 'IMG') return;
+  const b = img.parentNode; if (!b || !b.classList || !b.classList.contains('badge-game')) return;
+  b.classList.remove('img'); b.style.background = b.dataset.color || 'var(--accent-strong)'; b.textContent = b.dataset.fb || '?';
+  if ((b.dataset.fb || '').length > 3) b.classList.add('long');
+}, true);
 
 function issueIcon(l) { return icon({ error: 'error', warn: 'alert', info: 'info', ok: 'ok' }[l] || 'info', 'ic'); }
 function renderIssues(issues, target, onFixed) {

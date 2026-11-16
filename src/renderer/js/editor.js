@@ -19,7 +19,7 @@ App.views = App.views || {};
       sc.src = base + '/vs/loader.js';
       sc.onload = () => {
         window.require.config({ paths: { vs: base + '/vs' } });
-        window.require(['vs/editor/editor.main'], () => { S.monaco = window.monaco; EditorLangs.register(window.monaco); res(window.monaco); }, rej);
+        window.require(['vs/editor/editor.main'], () => { S.monaco = window.monaco; EditorLangs.register(window.monaco); Themes.applyMonaco(window.monaco); res(window.monaco); }, rej);
       };
       sc.onerror = () => rej(new Error('Nie udało się wczytać edytora Monaco'));
       document.head.appendChild(sc);
@@ -97,7 +97,7 @@ App.views = App.views || {};
       const open = S.expanded.has(it.path);
       const node = h(`<div class="node ${open ? 'open' : ''} ${S.active === it.path ? 'sel' : ''}" style="padding-left:${depth * 12 + 6}px" title="${esc(it.path)}">
         <span class="tw">${it.dir ? icon('chevron') : ''}</span>
-        <span class="fi">${it.dir ? `<svg viewBox="0 0 24 24" fill="${open ? '#3f7d5b' : '#2f5c44'}" stroke="none"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V6.5Z"/></svg>` : `<svg viewBox="0 0 24 24" fill="none" stroke="${fileIconColor(it.name)}" stroke-width="1.8"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8l-5-5Z"/></svg>`}</span>
+        <span class="fi">${it.dir ? `<svg viewBox="0 0 24 24" stroke="none" style="opacity:${open ? 1 : .85}"><path class="folder"  d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V6.5Z"/></svg>` : `<svg viewBox="0 0 24 24" fill="none" stroke="${fileIconColor(it.name)}" stroke-width="1.8"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8l-5-5Z"/></svg>`}</span>
         <span class="lbl">${esc(it.name)}</span></div>`);
       container.appendChild(node);
       const kids = h('<div></div>');

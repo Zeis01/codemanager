@@ -44,7 +44,7 @@ App.views.installers = {
     const SRC = { minecraft: 'Mojang / PaperMC / Purpur / Fabric / Forge / NeoForge / Quilt', terraria: 'GitHub: Pryaxis/TShock', fivem: 'Artefakty FXServer + cfx-server-data', mta: 'Instalacja MTA:SA (Windows) / linux.multitheftauto.com', beammp: 'GitHub: BeamMP/BeamMP-Server', mcproxy: 'PaperMC (Velocity) / md-5 CI (BungeeCord)', ark: 'SteamCMD: ASA 2430930 / ASE 376030' };
     const sw = $('[data-s]', el);
     for (const t of types) {
-      const card = h(`<div class="loader-card"><div class="row">${App.gameBadge({ color: t.color, short: SHORT[t.id], name: t.name }, 34)}<h2 style="flex:1">${esc(t.name)}</h2></div>
+      const card = h(`<div class="loader-card"><div class="row">${App.gameBadge({ color: t.color, short: SHORT[t.id], name: t.name, iconData: App.state.icons && App.state.icons.servers[t.id] }, 32)}<h2 style="flex:1">${esc(t.name)}</h2></div>
         <p>${esc(t.steamApp ? `SteamCMD, aplikacja ${t.steamApp}${t.needsLogin ? ' (wymaga konta z grą)' : ' (anonimowo)'}` : SRC[t.id] || '')}${t.frameworks.length ? `. Frameworki: ${t.frameworks.map(f => f.name).join(', ')}.` : ''}</p>
         <button class="btn">${icon('server')}Utwórz serwer</button></div>`);
       $('button', card).onclick = () => { App.go('servers'); setTimeout(() => { const b = document.querySelector('[data-new]'); if (b) { b.click(); setTimeout(() => { const o = document.querySelector(`.type-opt[data-t="${t.id}"]`); if (o) o.click(); }, 60); } }, 120); };
