@@ -26,8 +26,15 @@ class Updater {
     if (process.platform === 'win32' && U.listFiles(dir).some(f => /^Uninstall .*\.exe$/i.test(path.basename(f))) && U.exists(path.join(process.resourcesPath, 'app-update.yml'))) return 'installer';
     return 'zip';
   }
-  set(patch) { this.state = { ...this.state, ...patch, current: this.app.getVersion(), mode: this.mode(), repo: this.repo() }; this.emit('update:status', this.state); return this.state; }
-  status() { return this.set({}); }
+  // Zdarzenie wysyłane tylko przy faktycznej zmianie stanu (bez tego odczyt stanu w interfejsie wywoływał pętlę)
+  set(patch) {
+    const next = { ...this.state, ...patch, current: this.app.getVersion(), mode: this.mode(), repo: this.repo() };
+    const changed = JSON.stringify(next) !== JSON.stringify(this.state);
+    this.state = next;
+    if (changed) this.emit('update:status', this.state);
+    return this.state;
+  }
+  status() { return { ...this.state, current: this.app.getVersion(), mode: this.mode(), repo: this.repo() }; }
 
   schedule() {
     clearInterval(this.timer);

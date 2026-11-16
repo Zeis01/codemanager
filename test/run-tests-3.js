@@ -41,6 +41,7 @@ const tests = [
   ['odrzuca plik z błędną sumą (zip)', async () => { delete process.env.PORTABLE_EXECUTABLE_FILE; const plat = process.platform; Object.defineProperty(process, 'platform', { value: 'win32' }); process.resourcesPath = process.resourcesPath || '/nonexistent'; const u = mk(); await u.check(false); assert(/win-x64\.zip/.test(u.asset.name)); try { await assert.rejects(() => u.download(), /sumę kontrolną/); } finally { Object.defineProperty(process, 'platform', { value: plat }); } }],
   ['pominięta wersja nie jest zgłaszana w tle', async () => { settings.skipVersion = '1.3.0'; const s = await mk().check(true); assert.strictEqual(s.state, 'none'); delete settings.skipVersion; }],
   ['aktualna wersja → brak aktualizacji', async () => { app.getVersion = () => '1.3.0'; const s = await mk().check(false); assert.strictEqual(s.state, 'none'); app.getVersion = () => '1.2.0'; }],
+  ['odczyt stanu nie wysyła zdarzeń (brak pętli w ustawieniach)', async () => { const u = mk(); u.set({}); const before = events.length; for (let i = 0; i < 50; i++) u.status(); u.set({}); u.set({}); assert.strictEqual(events.length, before); u.set({ state: 'checking' }); assert.strictEqual(events.length, before + 1); }],
   ['czyszczenie opisu wydania', async () => { assert.strictEqual(cleanNotes('# Tytuł\n**pogrubione** [link](http://x)'), 'Tytuł\npogrubione link'); }],
 ];
 (async () => {

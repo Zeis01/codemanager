@@ -71,7 +71,12 @@ App.views.settings = {
       $('[data-rel]', upBox).onclick = () => api('shell:external', 'https://github.com/Zeis01/codemanager/releases');
     };
     drawUp();
-    App.onUpdateStatus = () => { if (App.current() === 'settings' && document.body.contains(upBox)) drawUp(); };
+    let lastShown = '';
+    App.onUpdateStatus = u => {
+      if (App.current() !== 'settings' || !document.body.contains(upBox)) return;
+      const key = `${u.state}|${u.progress}|${u.latest}|${u.error}`;
+      if (key !== lastShown) { lastShown = key; drawUp(); }
+    };
     $$('input[type=checkbox][data-k], input[type=number][data-k]', el).forEach(i => i.onchange = save);
     async function save() {
       const patch = {};
