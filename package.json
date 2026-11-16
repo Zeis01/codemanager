@@ -1,7 +1,7 @@
 {
   "name": "codemanager",
   "productName": "CodeManager",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CodeManager – menedżer modów, serwerów i edytor dla gier",
   "main": "src/main/main.js",
   "author": "CodeManager",
@@ -65,6 +65,8 @@
     "publish": [
       {
         "provider": "github",
+        "owner": "Zeis01",
+        "repo": "codemanager",
         "releaseType": "release"
       }
     ],
@@ -76,5 +78,9 @@
         ]
       }
     ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zeis01/codemanager.git"
   }
 }

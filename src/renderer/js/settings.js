@@ -63,18 +63,12 @@ App.views.settings = {
         <div class="upd-state ${c.state}"><div style="flex:1"><div style="font-weight:600">${esc(st.title)}</div><div class="dim" style="font-size:12.5px">${esc(st.sub)}</div></div>${st.action ? `<button class="btn ${c.state === 'available' || c.state === 'downloaded' ? 'primary' : ''} sm" data-act>${esc(st.action)}</button>` : ''}</div>
         ${c.state === 'downloading' ? `<div class="progress" style="margin:8px 0"><i style="width:${c.progress || 0}%"></i></div>` : ''}
         ${c.state === 'available' && c.notes ? `<details class="notes" open><summary>Co nowego w ${esc(c.latest)}</summary><pre>${esc(c.notes)}</pre></details>` : ''}
-        <div class="field" style="margin-top:12px"><label>Repozytorium GitHub (właściciel/nazwa)</label><input class="input mono" data-repo value="${esc(c.repoSetting)}" placeholder="${esc(c.defaultRepo || 'np. jankowalski/CodeManager')}"><span class="hint">Puste = repozytorium, z którego zbudowano program${c.defaultRepo ? ` (${esc(c.defaultRepo)})` : ''}.</span></div>
-        <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px"><div class="field"><label>Kanał</label><select class="input" data-ch><option value="stable" ${c.channel !== 'beta' ? 'selected' : ''}>Stabilny</option><option value="beta" ${c.channel === 'beta' ? 'selected' : ''}>Beta (wersje testowe)</option></select></div>
-        <div class="field"><label>Token GitHub (tylko prywatne repo)</label><input class="input mono" type="password" data-tok placeholder="${c.hasToken ? '•••••• zapisany' : 'opcjonalnie'}"></div></div>
-        <label class="check" style="margin-bottom:12px"><input type="checkbox" data-auto ${c.auto ? 'checked' : ''}><span>Sprawdzaj automatycznie (przy starcie i co 6 godzin)</span></label>
-        <div class="row"><button class="btn" data-saveupd>${icon('save')}Zapisz</button><button class="btn" data-check>${icon('refresh')}Sprawdź teraz</button><span class="dim" style="font-size:12px">Tryb: ${esc({ installer: 'instalator', portable: 'portable', zip: 'archiwum ZIP', dev: 'wersja deweloperska' }[c.mode] || c.mode)}</span></div>`;
+        <label class="check" style="margin:12px 0"><input type="checkbox" data-auto ${c.auto ? 'checked' : ''}><span>Sprawdzaj automatycznie (przy starcie i co 6 godzin)</span></label>
+        <div class="row"><button class="btn" data-check>${icon('refresh')}Sprawdź teraz</button><button class="btn ghost sm" data-rel>${icon('globe')}Wszystkie wydania</button></div>`;
       const act = $('[data-act]', upBox); if (act) act.onclick = () => App.updateAction(c);
       $('[data-check]', upBox).onclick = async () => { try { await window.cm.call('update:check'); } catch (e) { toast(e.message, 'warn', 7000); } drawUp(); };
-      $('[data-saveupd]', upBox).onclick = async () => {
-        const tok = $('[data-tok]', upBox).value;
-        await api('update:configure', { repo: $('[data-repo]', upBox).value, channel: $('[data-ch]', upBox).value, auto: $('[data-auto]', upBox).checked, ...(tok ? { token: tok } : {}) });
-        toast('Zapisano ustawienia aktualizacji'); drawUp();
-      };
+      $('[data-auto]', upBox).onchange = async e => { await api('update:configure', { auto: e.target.checked }); toast(e.target.checked ? 'Automatyczne sprawdzanie włączone' : 'Automatyczne sprawdzanie wyłączone'); };
+      $('[data-rel]', upBox).onclick = () => api('shell:external', 'https://github.com/Zeis01/codemanager/releases');
     };
     drawUp();
     App.onUpdateStatus = () => { if (App.current() === 'settings' && document.body.contains(upBox)) drawUp(); };

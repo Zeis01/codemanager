@@ -1,4 +1,4 @@
-// Aktualizacje z GitHub Releases
+// Aktualizacje z GitHub Releases (publiczne repozytorium Zeis01/codemanager)
 // - instalacja przez instalator (NSIS): electron-updater (pobieranie w tle, instalacja przy zamknięciu / od razu)
 // - wersja portable i .zip: własny mechanizm – pobranie z GitHub, weryfikacja SHA-256, podmiana plików skryptem po zamknięciu
 'use strict';
@@ -11,26 +11,14 @@ const U = require('./util');
 const N = require('./net');
 
 class Updater {
-  constructor({ app, getSettings, emit, defaultRepo, getToken }) {
-    Object.assign(this, { app, getSettings, emit, defaultRepo, getToken });
+  constructor({ app, getSettings, emit, repo }) {
+    Object.assign(this, { app, getSettings, emit, fixedRepo: repo });
     this.state = { state: 'idle', current: app.getVersion() };
     this.timer = null;
     this.au = null;
   }
 
-  repo() {
-    const r = (this.getSettings().updateRepo || this.defaultRepo || this.bakedRepo() || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '').replace(/\/$/, '');
-    if (!/^[\w.-]+\/[\w.-]+$/.test(r) || /TWOJ-LOGIN/i.test(r)) return null;
-    return r;
-  }
-  // repozytorium zapisane przez electron-builder podczas budowania (resources/app-update.yml)
-  bakedRepo() {
-    if (this._baked !== undefined) return this._baked;
-    const t = process.resourcesPath ? U.readText(path.join(process.resourcesPath, 'app-update.yml'), '') : '';
-    const owner = (t.match(/^owner:\s*(.+)$/m) || [])[1], repo = (t.match(/^repo:\s*(.+)$/m) || [])[1];
-    this._baked = owner && repo ? `${owner.trim().replace(/['"]/g, '')}/${repo.trim().replace(/['"]/g, '')}` : null;
-    return this._baked;
-  }
+  repo() { return this.fixedRepo; }
   mode() {
     if (!this.app.isPackaged) return 'dev';
     if (process.env.PORTABLE_EXECUTABLE_FILE) return 'portable';
@@ -63,28 +51,19 @@ class Updater {
   }
   feed() {
     const [owner, repo] = this.repo().split('/');
-    const token = this.getToken();
-    return { provider: 'github', owner, repo, ...(token ? { private: true, token } : {}) };
+    return { provider: 'github', owner, repo };
   }
 
   // ---------- sprawdzanie ----------
   async latestRelease() {
-    const s = this.getSettings();
-    const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'CodeManager-Updater' };
-    const token = this.getToken(); if (token) headers.Authorization = `Bearer ${token}`;
-    const url = s.updateChannel === 'beta' ? `https://api.github.com/repos/${this.repo()}/releases?per_page=10` : `https://api.github.com/repos/${this.repo()}/releases/latest`;
-    const r = await fetch(url, { headers });
-    if (r.status === 404) throw new Error(`Nie znaleziono wydań w repozytorium ${this.repo()} (sprawdź nazwę lub dodaj token dla prywatnego repozytorium).`);
+    const r = await fetch(`https://api.github.com/repos/${this.repo()}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CodeManager-Updater' } });
+    if (r.status === 404) throw new Error('Nie opublikowano jeszcze żadnego wydania.');
     if (r.status === 403) throw new Error('GitHub ograniczył liczbę zapytań – spróbuj za godzinę.');
     if (!r.ok) throw new Error('GitHub: HTTP ' + r.status);
-    const j = await r.json();
-    const rel = Array.isArray(j) ? j.find(x => !x.draft) : j;
-    if (!rel) throw new Error('Repozytorium nie ma jeszcze żadnych wydań.');
-    return rel;
+    return r.json();
   }
 
   async check(silent = false) {
-    if (!this.repo()) { this.set({ state: 'unconfigured' }); if (!silent) throw new Error('Ustaw repozytorium GitHub (właściciel/nazwa) w Ustawieniach → Aktualizacje.'); return this.state; }
     this.set({ state: 'checking', error: null });
     try {
       const rel = await this.latestRelease();
@@ -97,7 +76,7 @@ class Updater {
       this.release = rel; this.asset = asset;
       if (this.mode() === 'installer') {
         const au = this.autoUpdater();
-        au.allowPrerelease = s.updateChannel === 'beta';
+        au.allowPrerelease = false;
         au.setFeedURL(this.feed());
         await au.checkForUpdates();
       }
@@ -123,10 +102,7 @@ class Updater {
     const dest = path.join(os.tmpdir(), 'codemanager-update', this.asset.name);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     this.set({ state: 'downloading', progress: 0 });
-    const headers = {}; const token = this.getToken();
-    const url = token ? this.asset.url : this.asset.browser_download_url;
-    if (token) { headers.Authorization = `Bearer ${token}`; headers.Accept = 'application/octet-stream'; }
-    await downloadWithHeaders(url, dest, headers, p => this.set({ state: 'downloading', progress: p.pct }));
+    await downloadWithHeaders(this.asset.browser_download_url, dest, {}, p => this.set({ state: 'downloading', progress: p.pct }));
     // weryfikacja: GitHub podaje skrót SHA-256 zasobu w polu "digest"
     if (this.asset.digest && /^sha256:/i.test(this.asset.digest)) {
       const h = crypto.createHash('sha256').update(fs.readFileSync(dest)).digest('hex');

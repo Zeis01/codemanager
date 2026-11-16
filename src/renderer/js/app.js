@@ -50,10 +50,9 @@
   App.refreshCurrent = () => App.go(current, currentParams);
   App.updateStatusText = c => {
     switch (c.state) {
-      case 'unconfigured': return { title: 'Aktualizacje nie są skonfigurowane', sub: 'Podaj repozytorium GitHub, z którego publikujesz wydania.' };
       case 'checking': return { title: 'Sprawdzanie…', sub: 'Łączenie z GitHub' };
       case 'none': return { title: `Masz najnowszą wersję (${c.current})`, sub: c.checkedAt ? 'Sprawdzono ' + App.timeAgo(c.checkedAt) : '', action: 'Sprawdź' };
-      case 'available': return { title: `Dostępna wersja ${c.latest}${c.prerelease ? ' (beta)' : ''}`, sub: `Masz ${c.current}${c.published ? ' · wydano ' + new Date(c.published).toLocaleDateString('pl-PL') : ''}${c.asset ? ' · ' + App.fmtSize(c.asset.size) : ''}`, action: 'Pobierz i zainstaluj' };
+      case 'available': return { title: `Dostępna wersja ${c.latest}`, sub: `Masz ${c.current}${c.published ? ' · wydano ' + new Date(c.published).toLocaleDateString('pl-PL') : ''}${c.asset ? ' · ' + App.fmtSize(c.asset.size) : ''}`, action: 'Pobierz i zainstaluj' };
       case 'downloading': return { title: `Pobieranie aktualizacji… ${c.progress || 0}%`, sub: 'Możesz dalej korzystać z programu' };
       case 'downloaded': return { title: `Wersja ${c.latest} jest gotowa`, sub: c.mode === 'installer' ? 'Zainstaluje się teraz albo przy zamknięciu programu' : 'Program zamknie się, podmieni pliki i uruchomi ponownie', action: 'Uruchom ponownie i zainstaluj' };
       case 'error': return { title: 'Nie udało się sprawdzić aktualizacji', sub: c.error || '', action: 'Spróbuj ponownie' };

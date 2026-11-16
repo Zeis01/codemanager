@@ -11,7 +11,7 @@ Ze źródeł (wymaga Node.js 20+):
 ```
 npm install
 npm start          # uruchomienie
-npm test           # 64 testy: parsery, checkery, funkcje 1.1 i updater
+npm test           # 62 testy: parsery, checkery, funkcje 1.1 i updater
 npm run dist       # instalator, portable i zip (bez publikacji)
 npm run release    # to samo + publikacja wydania na GitHub (GH_TOKEN)
 ```
@@ -52,18 +52,18 @@ CodeManager sprawdza nowe wydania na GitHub przy starcie i co 6 godzin (Ustawien
 
 - **Instalator** (`CodeManager-Setup-x.y.z.exe`) – aktualizacja przez electron-updater: pobranie w tle, instalacja od razu albo przy zamknięciu.
 - **Portable** i **ZIP** – CodeManager pobiera nowy plik z wydania, sprawdza sumę SHA-256 podaną przez GitHub, zamyka się, podmienia pliki i uruchamia ponownie.
-- Kanał **stabilny** lub **beta** (wydania oznaczone jako pre-release), możliwość pominięcia wersji, token dla prywatnego repozytorium (szyfrowany).
+- Wydania są pobierane z publicznego repozytorium [Zeis01/codemanager](https://github.com/Zeis01/codemanager/releases) – nic nie trzeba konfigurować.
 
 ### Jak publikować wydania
 
-1. Utwórz repozytorium na GitHub i wypchnij kod (`git remote add origin https://github.com/LOGIN/CodeManager.git`).
-2. Podnieś wersję i wypchnij tag – workflow `.github/workflows/release.yml` zbuduje instalator, wersję portable i ZIP, i opublikuje je razem z `latest.yml`:
-   ```
-   npm version 1.2.1
-   git push --follow-tags
-   ```
-   Lokalnie: `GH_TOKEN=... npm run release`.
-3. Repozytorium jest zapisywane w programie podczas budowania (z `git remote`), więc nie trzeba go nigdzie wpisywać. W Ustawieniach możesz je zmienić.
+```
+git add .
+git commit -m "Opis zmian"
+npm version patch
+git push --follow-tags
+```
+
+Workflow `.github/workflows/release.yml` zbuduje instalator, wersję portable i ZIP i opublikuje je jako wydanie na GitHub.
 
 ## Nowości w wersji 1.1
 

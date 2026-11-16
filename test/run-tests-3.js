@@ -23,15 +23,14 @@ global.fetch = async (url) => {
   return { ok: false, status: 404 };
 };
 
-const settings = { updateRepo: 'jan/CodeManager' };
+const settings = {};
 const app = { getVersion: () => '1.2.0', isPackaged: true, quit() {} };
 const events = [];
-const mk = () => new Updater({ app, getSettings: () => settings, emit: (c, d) => events.push(d), defaultRepo: '', getToken: () => null });
+const mk = () => new Updater({ app, getSettings: () => settings, emit: (c, d) => events.push(d), repo: 'Zeis01/codemanager' });
 
 let passed = 0, failed = 0;
 const tests = [
-  ['repozytorium: normalizacja adresu', async () => { settings.updateRepo = 'https://github.com/jan/CodeManager.git'; assert.strictEqual(mk().repo(), 'jan/CodeManager'); settings.updateRepo = 'TWOJ-LOGIN/CodeManager'; assert.strictEqual(mk().repo(), null); settings.updateRepo = 'jan/CodeManager'; }],
-  ['brak konfiguracji → komunikat', async () => { settings.updateRepo = ''; const u = mk(); await assert.rejects(() => u.check(false), /repozytorium/i); settings.updateRepo = 'jan/CodeManager'; }],
+  ['stałe repozytorium Zeis01/codemanager', async () => { assert.strictEqual(mk().repo(), 'Zeis01/codemanager'); await mk().check(false); assert(calls.some(u => u.includes('/repos/Zeis01/codemanager/releases/latest'))); }],
   ['wykrywa nowszą wersję (portable)', async () => {
     process.env.PORTABLE_EXECUTABLE_FILE = 'C:\\CodeManager.exe';
     const u = mk(); const s = await u.check(false);
@@ -40,7 +39,6 @@ const tests = [
   }],
   ['pobiera i weryfikuje SHA-256', async () => { const u = mk(); await u.check(false); const s = await u.download(); assert.strictEqual(s.state, 'downloaded'); assert.strictEqual(fs.readFileSync(u.downloaded, 'utf8'), payload.toString()); }],
   ['odrzuca plik z błędną sumą (zip)', async () => { delete process.env.PORTABLE_EXECUTABLE_FILE; const plat = process.platform; Object.defineProperty(process, 'platform', { value: 'win32' }); process.resourcesPath = process.resourcesPath || '/nonexistent'; const u = mk(); await u.check(false); assert(/win-x64\.zip/.test(u.asset.name)); try { await assert.rejects(() => u.download(), /sumę kontrolną/); } finally { Object.defineProperty(process, 'platform', { value: plat }); } }],
-  ['kanał beta wybiera wersję testową', async () => { settings.updateChannel = 'beta'; const s = await mk().check(false); assert.strictEqual(s.latest, '1.4.0-beta.1'); assert(s.prerelease); delete settings.updateChannel; }],
   ['pominięta wersja nie jest zgłaszana w tle', async () => { settings.skipVersion = '1.3.0'; const s = await mk().check(true); assert.strictEqual(s.state, 'none'); delete settings.skipVersion; }],
   ['aktualna wersja → brak aktualizacji', async () => { app.getVersion = () => '1.3.0'; const s = await mk().check(false); assert.strictEqual(s.state, 'none'); app.getVersion = () => '1.2.0'; }],
   ['czyszczenie opisu wydania', async () => { assert.strictEqual(cleanNotes('# Tytuł\n**pogrubione** [link](http://x)'), 'Tytuł\npogrubione link'); }],

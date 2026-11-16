@@ -516,26 +516,19 @@ handle('schedule:next', id => scheduler.nextRestart(servers.get(id)));
 // Aktualizacje z GitHub
 // =====================================================================
 const { Updater } = require('./updater');
-const pkg = require('../../package.json');
-const pub = [].concat((pkg.build && pkg.build.publish) || [])[0] || {};
-function ghToken() {
-  const enc = config.settings.ghTokenEnc; if (!enc) return null;
-  try { return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(enc, 'base64')) : Buffer.from(enc, 'base64').toString('utf8'); } catch { return null; }
-}
-const updater = new Updater({ app, getSettings: () => config.settings, emit, defaultRepo: pub.owner && pub.repo ? `${pub.owner}/${pub.repo}` : (pkg.repository ? String(pkg.repository.url || pkg.repository).replace(/^.*github\.com[/:]/, '').replace(/\.git$/, '') : ''), getToken: ghToken });
+const UPDATE_REPO = 'Zeis01/codemanager';
+const updater = new Updater({ app, getSettings: () => config.settings, emit, repo: UPDATE_REPO });
 app.whenReady().then(() => { if (!process.env.CM_SCREENSHOT_DIR) updater.schedule(); });
+const updateConfig = () => ({ ...updater.status(), auto: config.settings.autoUpdate !== false });
 handle('update:status', () => updater.status());
 handle('update:check', () => updater.check(false));
 handle('update:download', () => updater.download());
 handle('update:install', () => updater.install());
 handle('update:skip', v => { config.settings.skipVersion = v; saveConfig(); return updater.set({ state: 'none', skipped: true }); });
 handle('update:configure', o => {
-  if (o.repo !== undefined) config.settings.updateRepo = o.repo.trim();
-  if (o.channel) config.settings.updateChannel = o.channel;
   if (o.auto !== undefined) config.settings.autoUpdate = !!o.auto;
-  if (o.token !== undefined) { if (o.token) config.settings.ghTokenEnc = (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(o.token) : Buffer.from(o.token, 'utf8')).toString('base64'); else delete config.settings.ghTokenEnc; }
   delete config.settings.skipVersion;
   saveConfig(); updater.schedule();
-  return { ...updater.status(), hasToken: !!config.settings.ghTokenEnc, channel: config.settings.updateChannel || 'stable', auto: config.settings.autoUpdate !== false, repoSetting: config.settings.updateRepo || '', defaultRepo: updater.defaultRepo || updater.bakedRepo() };
+  return updateConfig();
 });
-handle('update:config', () => ({ ...updater.status(), hasToken: !!config.settings.ghTokenEnc, channel: config.settings.updateChannel || 'stable', auto: config.settings.autoUpdate !== false, repoSetting: config.settings.updateRepo || '', defaultRepo: updater.defaultRepo || updater.bakedRepo() }));
+handle('update:config', updateConfig);
