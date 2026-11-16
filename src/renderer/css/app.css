@@ -443,3 +443,4 @@ textarea.input { height: auto; padding: 6px 8px; resize: vertical; }
 
 @media (max-width: 1150px) { .overview { grid-template-columns: 1fr; } .finding-g { grid-template-columns: 1fr; } .results { grid-template-columns: 1fr; } .kv { grid-template-columns: repeat(2, 1fr); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.star { color: #e3b341; font-size: .95em; cursor: help; }

@@ -98,7 +98,7 @@ handle('mods:profiles', id => compat.profiles(id, infoFor(id)));
 handle('mods:check', (id, profileId) => {
   const info = infoFor(id);
   const prof = compat.profiles(id, info).find(p => p.id === profileId);
-  return compat.check(id, info, prof, (config.games[id] || {}).settings || {});
+  return compat.check(id, info, prof, { ...((config.games[id] || {}).settings || {}), __nexus: nexusRegFor(id) });
 });
 handle('mods:online', (id, profileId) => {
   const info = infoFor(id);
@@ -403,6 +403,7 @@ handle('import:r2', async (jobId, target, source) => {
 });
 
 // ---------- naprawy jednym kliknięciem ----------
+function nexusRegFor(id) { try { return nexusReg.forGame(id); } catch { return []; } }
 handle('fix:run', async (jobId, action, target) => {
   const log = jobLog(jobId), progress = jobProg(jobId);
   switch (action.type) {
@@ -434,6 +435,7 @@ handle('fix:run', async (jobId, action, target) => {
     case 'framework': return servers.installFramework(target.serverId, action.id);
     case 'patch-gameinfo': require('./servers/defs').patchGameinfo(servers.get(target.serverId).path, log); return true;
     case 'open': await shell.openExternal(action.url); return true;
+    case 'patch-fsgame': require('./compat/games3').patchFsgame(action.file); log('Poprawiono fsgame.ltx (kopia: fsgame.ltx.bak)'); return true;
   }
   throw new Error('Nieznana naprawa: ' + action.type);
 });

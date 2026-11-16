@@ -30,6 +30,10 @@ const DOMAINS = {
   projectzomboid: 'projectzomboid', ets2: 'eurotrucksimulator2', sotf: 'sonsoftheforest', lethalcompany: 'lethalcompany', repo: 'repo', contentwarning: 'contentwarning',
   schedule1: 'schedule1', peopleplayground: 'peopleplayground', transportfever2: 'transportfever2', hoi4: 'heartsofironiv', garrysmod: 'garrysmod', dst: 'dontstarvetogether',
   gta5: 'gta5', terraria: 'terraria', rimworld: 'rimworld', stardew: 'stardewvalley', skyrimse: 'skyrimspecialedition', fallout4: 'fallout4', sevendays: '7daystodie',
+  cyberpunk2077: 'cyberpunk2077', witcher3: 'witcher3', payday2: 'payday2', payday3: 'payday3', mysummercar: 'mysummercar', mywintercar: 'mywintercar', teardown: 'teardown',
+  stalkersoc: 'stalkershadowofchernobyl', stalkercs: 'stalkerclearsky', stalkercop: 'stalkercallofpripyat', stalker2: 'stalker2heartofchornobyl',
+  metro2033redux: 'metro2033redux', metrolastlightredux: 'metrolastlightredux', metroexodus: 'metroexodus', readyornot: 'readyornot',
+  citiesskylines: 'citiesskylines', citiesskylines2: 'citiesskylines2',
 };
 
 async function validate() { return get('/v1/users/validate.json'); }

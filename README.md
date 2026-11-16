@@ -36,6 +36,21 @@ Pominięte celowo: **Brick Rigs** i **Ready or Not** – ich mody nie mają meta
 
 **Edytor** – Monaco (silnik VS Code): drzewo plików, zakładki, wyszukiwanie w plikach, szybkie otwieranie (Ctrl+P), podświetlanie Lua, JSON, TOML, YAML, XML, C#, SourcePawn, Enforce Script (DayZ/Reforger), SQF, Paradox, SII, KeyValues (gameinfo.gi), cfg serwerów, mcfunction i logów; snippety i szablony plików dla każdej gry.
 
+## Nowe gry (1.4)
+
+Gry oznaczone ★ mają najlepsze sprawdzanie zgodności (zależności, wersje, konflikty).
+
+| Gra | Zakres |
+|---|---|
+| ★ Cyberpunk 2077 | frameworki i ich wymagania (CET, RED4ext, redscript, TweakXL, ArchiveXL, Codeware, REDmod), błędy z logów |
+| ★ Wiedźmin 3 | konflikty skryptów między modami (Script Merger), mods.settings |
+| PAYDAY 2 | SuperBLT, BeardLib, poprawność mod.txt, duplikaty, log BLT |
+| My Summer Car | MSCLoader, mody i biblioteki we właściwych folderach |
+| Teardown | info.txt, pliki startowe, duplikaty |
+| S.T.A.L.K.E.R.: SoC / CS / CoP | gamedata i ustawienie fsgame.ltx |
+
+**Instalacja ręczna** (bez sprawdzania zgodności – mody można instalować z Nexus Mods lub archiwum oraz włączać i wyłączać): S.T.A.L.K.E.R. 2, My Winter Car, Metro 2033 Redux, Metro: Last Light Redux, Metro Exodus, PAYDAY 3, Ready or Not, Brick Rigs, Cities: Skylines, Cities: Skylines II.
+
 ## Wygląd i motywy (1.3)
 
 - Domyślny motyw **Klasyczny**: szare tło i zielone wyróżnienia. Wbudowane są też: Grafit, Jasny, Nocny, Leśny i Wysoki kontrast (Ustawienia → Wygląd).

@@ -9,10 +9,11 @@ const N = require('../net');
 
 const MARKERS = {
   stardew: ['manifest.json'], rimworld: ['About/About.xml'], projectzomboid: ['mod.info', '42/mod.info'], peopleplayground: ['mod.json'], transportfever2: ['mod.lua'],
-  dst: ['modinfo.lua'], sevendays: ['ModInfo.xml'], garrysmod: ['addon.json'], sotf: ['manifest.json'],
+  dst: ['modinfo.lua'], sevendays: ['ModInfo.xml'], garrysmod: ['addon.json'], sotf: ['manifest.json'], payday2: ['mod.txt', 'main.xml'], teardown: ['info.txt'],
 };
-const FILE_MODS = { minecraft: ['.jar'], ets2: ['.scs'], terraria: ['.tmod'], factorio: ['.zip'], garrysmod: ['.gma'] };
-const ROOT_DIRS = { gta5: ['scripts', 'mods', 'plugins'], schedule1: ['Mods', 'Plugins', 'UserLibs'], sotf: ['Mods', '_RedLoader'] };
+const PAK = ['.pak', '.ucas', '.utoc', '.sig'];
+const FILE_MODS = { minecraft: ['.jar'], ets2: ['.scs'], terraria: ['.tmod'], factorio: ['.zip'], garrysmod: ['.gma'], stalker2: PAK, payday3: PAK, readyornot: PAK, mysummercar: ['.dll'] };
+const ROOT_DIRS = { gta5: ['scripts', 'mods', 'plugins'], schedule1: ['Mods', 'Plugins', 'UserLibs'], sotf: ['Mods', '_RedLoader'], cyberpunk2077: ['archive', 'bin', 'r6', 'red4ext', 'mods', 'engine'], witcher3: ['Mods', 'mods', 'dlc', 'DLC', 'bin'], payday2: ['mods', 'assets'], mysummercar: ['Mods'], stalkersoc: ['gamedata', 'bin'], stalkercs: ['gamedata', 'bin'], stalkercop: ['gamedata', 'bin'] };
 
 async function extract(archive, dest, log) {
   fs.mkdirSync(dest, { recursive: true });
@@ -83,6 +84,10 @@ async function installArchive(archive, { game, target, gameRoot, log }) {
     }
     // mody kopiowane do folderu gry
     if (ROOT_DIRS[id] && hasRootDirs(root, game)) { for (const e of U.listDir(root)) copy(path.join(root, e.name), path.join(gameRoot, e.name)); return out; }
+    if (id === 'witcher3') { const mods = U.listDirs(root).filter(d => /^mod/i.test(path.basename(d))); if (mods.length) { for (const d of mods) copy(d, path.join(target, path.basename(d))); return out; } }
+    // gry, w których mod rozpakowuje się wprost do folderu gry
+    if (game.manual && game.manual.root || ['metro2033redux', 'metrolastlightredux', 'metroexodus', 'cyberpunk2077'].includes(id)) { for (const e of U.listDir(root)) copy(path.join(root, e.name), path.join(gameRoot, e.name)); return out; }
+    if (['stalkersoc', 'stalkercs', 'stalkercop'].includes(id)) { for (const e of U.listDir(root)) copy(path.join(root, e.name), path.join(gameRoot, 'gamedata', e.name)); return out; }
     if (id === 'gta5' || id === 'schedule1') { for (const e of U.listDir(root)) copy(path.join(root, e.name), path.join(target, e.name)); return out; }
     // domyślnie: folder
     const base = root === tmp ? path.basename(archive).replace(/\.(zip|7z|rar)$/i, '') : path.basename(root);

@@ -55,6 +55,93 @@ t('ikony: serwer bierze ikonę gry', async () => {
   assert.deepStrictEqual(await ic.forServerType('nieznany', {}, { online: false }), {});
 });
 
+// ---------- nowe gry ----------
+const G3 = require('../src/main/compat/games3');
+const compat = require('../src/main/compat');
+const games = require('../src/main/games');
+const U = require('../src/main/util');
+const w = (p, c) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c); return p; };
+const has = (rep, level, re) => rep.issues.some(i => i.level === level && re.test(i.title));
+t('lista gier: każda ma poziom zgodności, wszystkie z listy użytkownika są obecne', () => {
+  for (const g of games.GAMES) assert(['full', 'basic', 'none'].includes(g.compat), g.id);
+  for (const id of ['mysummercar', 'mywintercar', 'teardown', 'stalkersoc', 'stalkercs', 'stalkercop', 'stalker2', 'metro2033redux', 'metrolastlightredux', 'metroexodus', 'payday2', 'payday3', 'skyrimse', 'fallout4', 'cyberpunk2077', 'witcher3', 'sevendays', 'brickrigs', 'readyornot', 'citiesskylines']) assert(games.byId(id), id);
+  assert.strictEqual(games.UNSUPPORTED.length, 0);
+});
+t('Cyberpunk: brakujące frameworki', () => {
+  const gp = path.join(root, 'cp');
+  w(path.join(gp, 'r6', 'scripts', 'MyMod', 'main.reds'), 'import Codeware.*\nfunc x() {}');
+  w(path.join(gp, 'r6', 'tweaks', 'MyTweak', 'a.yaml'), 'x: 1');
+  w(path.join(gp, 'archive', 'pc', 'mod', 'cool.archive'), 'x'); w(path.join(gp, 'archive', 'pc', 'mod', 'cool.archive.xl'), 'x');
+  w(path.join(gp, 'bin', 'x64', 'plugins', 'cyber_engine_tweaks', 'mods', 'Menu', 'init.lua'), '');
+  const r = G3.checkCyberpunk({ gamePath: gp, settings: {} });
+  for (const n of ['redscript', 'TweakXL', 'ArchiveXL', 'Codeware', 'RED4ext', 'Cyber Engine Tweaks']) assert(has(r, 'error', new RegExp('Brakuje ' + n)), n);
+  w(path.join(gp, 'engine', 'config', 'base', 'scripts.ini'), ''); w(path.join(gp, 'red4ext', 'RED4ext.dll'), 'x'); w(path.join(gp, 'bin', 'x64', 'winmm.dll'), 'x');
+  for (const p of ['TweakXL', 'ArchiveXL', 'Codeware']) w(path.join(gp, 'red4ext', 'plugins', p, p + '.dll'), 'x');
+  w(path.join(gp, 'bin', 'x64', 'plugins', 'cyber_engine_tweaks.asi'), 'x');
+  const r2 = G3.checkCyberpunk({ gamePath: gp, settings: {} });
+  assert(!r2.issues.some(i => i.level === 'error'), r2.issues.map(i => i.title).join(' | '));
+});
+t('Wiedźmin 3: konflikt skryptów i mods.settings', () => {
+  const gp = path.join(root, 'w3');
+  w(path.join(gp, 'Mods', 'modA', 'content', 'scripts', 'game', 'player', 'r4Player.ws'), 'a');
+  w(path.join(gp, 'Mods', 'modB', 'content', 'scripts', 'game', 'player', 'r4Player.ws'), 'b');
+  w(path.join(gp, 'Mods', 'Bad', 'x.txt'), '');
+  const docs = U.documents; U.documents = () => path.join(root, 'docs');
+  const r = G3.checkWitcher3({ gamePath: gp, settings: {} });
+  assert(has(r, 'error', /Konflikt skryptów: modA ↔ modB/)); assert(has(r, 'warn', /nie zaczyna się od „mod”/));
+  G3.w3Toggle('modB', false);
+  assert(/\[modB\]\r?\nEnabled=0/.test(fs.readFileSync(path.join(root, 'docs', 'The Witcher 3', 'mods.settings'), 'utf8')));
+  const r2 = G3.checkWitcher3({ gamePath: gp, settings: {} });
+  assert(!has(r2, 'error', /Konflikt/));
+  w(path.join(gp, 'Mods', 'mod0000_MergedFiles', 'content', 'scripts', 'game', 'player', 'r4Player.ws'), 'm');
+  G3.w3Toggle('modB', true);
+  assert(!has(G3.checkWitcher3({ gamePath: gp, settings: {} }), 'error', /Konflikt/));
+  U.documents = docs;
+});
+t('PAYDAY 2: SuperBLT, BeardLib, mod.txt', () => {
+  const gp = path.join(root, 'pd2');
+  w(path.join(gp, 'mods', 'Good', 'mod.txt'), '{ "name": "Good", "version": "1.0", "blt_version": 2, }');
+  w(path.join(gp, 'mods', 'Broken', 'mod.txt'), '{ "name": "Broken" "version": 1 }');
+  w(path.join(gp, 'mods', 'XmlMod', 'main.xml'), '<mod/>');
+  const r = G3.checkPayday2({ gamePath: gp, settings: {} });
+  assert(has(r, 'error', /Brak SuperBLT/)); assert(has(r, 'error', /Brak BeardLib/)); assert(has(r, 'error', /Broken: mod\.txt zawiera błąd/));
+});
+t('My Summer Car: MSCLoader i biblioteki', () => {
+  const gp = path.join(root, 'msc');
+  w(path.join(gp, 'Mods', 'Good.dll'), 'MSCLoader'); w(path.join(gp, 'Mods', 'Lib.dll'), 'Newtonsoft'); w(path.join(gp, 'Mods', 'Bep.dll'), 'BepInEx');
+  const r = G3.checkMySummerCar({ gamePath: gp, settings: {} });
+  assert(has(r, 'error', /MSCLoader nie jest/)); assert(has(r, 'warn', /Lib\.dll nie jest modem/)); assert(has(r, 'error', /Bep to plugin BepInEx/));
+});
+t('Teardown i S.T.A.L.K.E.R.', () => {
+  const docs = U.documents; U.documents = () => path.join(root, 'docs2');
+  w(path.join(root, 'docs2', 'Teardown', 'mods', 'Car', 'info.txt'), 'name = Super Car\nauthor = Ja'); w(path.join(root, 'docs2', 'Teardown', 'mods', 'Car', 'main.lua'), '');
+  w(path.join(root, 'docs2', 'Teardown', 'mods', 'Empty', 'x.png'), '');
+  const r = G3.checkTeardown({ workshop: [], settings: {} });
+  assert(has(r, 'error', /Empty: brak info\.txt/)); assert(r.mods.find(m => m.name === 'Super Car'));
+  U.documents = docs;
+  const gp = path.join(root, 'soc');
+  w(path.join(gp, 'fsgame.ltx'), '$app_data_root$ = true| false| $fs_root$| _appdata_\\\n$game_data$ = false| true| $fs_root$| gamedata\\\n');
+  w(path.join(gp, 'gamedata', 'config', 'system.ltx'), '');
+  const r2 = G3.checkXray({ game: { id: 'stalkersoc', name: 'SoC' }, gamePath: gp, settings: {} });
+  assert(has(r2, 'error', /nie wczyta modów/));
+  G3.patchFsgame(path.join(gp, 'fsgame.ltx'));
+  assert(!has(G3.checkXray({ game: { id: 'stalkersoc', name: 'SoC' }, gamePath: gp, settings: {} }), 'error', /nie wczyta/));
+});
+t('instalacja ręczna: paczki .pak razem z .ucas/.utoc i przełączanie', () => {
+  const gp = path.join(root, 'ron'); const md = path.join(gp, 'ReadyOrNot', 'Content', 'Paks', '~mods');
+  w(path.join(md, 'Guns_P.pak'), 'x'); w(path.join(md, 'Guns_P.ucas'), 'x'); w(path.join(md, 'Guns_P.utoc'), 'x'); w(path.join(md, 'Map.pak'), 'x');
+  const g = games.byId('readyornot');
+  const r = G3.checkFiles({ game: g, gamePath: gp, workshop: [], settings: {} });
+  assert.strictEqual(r.mods.length, 2); assert(!r.issues.some(i => i.level === 'error' || i.level === 'warn'));
+  const guns = r.mods.find(m => m.name === 'Guns');
+  compat.toggle(guns, {});
+  assert(fs.existsSync(path.join(md, 'Guns_P.ucas.disabled')) && fs.existsSync(path.join(md, 'Guns_P.pak.disabled')));
+  const r2 = G3.checkFiles({ game: g, gamePath: gp, workshop: [], settings: {} });
+  const g2 = r2.mods.find(m => m.name === 'Guns'); assert.strictEqual(g2.enabled, false);
+  compat.toggle(g2, {}); assert(fs.existsSync(path.join(md, 'Guns_P.utoc')));
+  assert.strictEqual(compat.modsTarget('readyornot', null, { path: gp }), md);
+});
+
 (async () => {
   for (const [n, f] of queue) { try { await f(); passed++; console.log('  ✔ ' + n); } catch (e) { failed++; console.log('  ✖ ' + n + '\n    ' + String(e.stack).split('\n').slice(0, 3).join('\n    ')); } }
   fs.rmSync(root, { recursive: true, force: true });

@@ -8,6 +8,7 @@ const mc = require('./minecraft');
 const unity = require('./unity');
 const G = require('./games');
 const G2 = require('./games2');
+const G3 = require('./games3');
 const { toggleByRename } = require('./common');
 
 // Profile (instancje) dla gry – np. instancje Minecrafta lub profile r2modman
@@ -41,6 +42,13 @@ function modsTarget(gameId, profile, info) {
     case 'factorio': return path.join(G2.factorioUserDir(root), 'mods');
     case 'bethesda': return path.join(root, 'Data');
     case 'sevendays': return path.join(root, 'Mods');
+    case 'cyberpunk': return root;
+    case 'witcher3': return path.join(root, 'Mods');
+    case 'payday2': return path.join(root, 'mods');
+    case 'mysummercar': return path.join(root, 'Mods');
+    case 'teardown': return path.join(U.documents(), 'Teardown', 'mods');
+    case 'xray': return root;
+    case 'files': { const g = byId(gameId); if (g.manual.root) return root; const d = G3.manualDirs(g, { gamePath: root, workshop: [] })[0]; return d || root; }
     default: return root;
   }
 }
@@ -72,6 +80,13 @@ function check(gameId, info, profile, settings = {}) {
     case 'factorio': return G2.checkFactorio(ctx);
     case 'bethesda': return G2.checkBethesda(ctx);
     case 'sevendays': return G2.checkSevenDays(ctx);
+    case 'cyberpunk': return G3.checkCyberpunk(ctx);
+    case 'witcher3': return G3.checkWitcher3(ctx);
+    case 'payday2': return G3.checkPayday2(ctx);
+    case 'mysummercar': return G3.checkMySummerCar(ctx);
+    case 'teardown': return G3.checkTeardown(ctx);
+    case 'xray': return G3.checkXray(ctx);
+    case 'files': return G3.checkFiles({ ...ctx, nexusInstalls: settings.__nexus || [] });
   }
   throw new Error('Brak sprawdzania dla tej gry');
 }
@@ -90,6 +105,11 @@ async function online(gameId, info, profile, settings = {}) {
 // Przełączanie moda
 function toggle(mod, ctx = {}) {
   if (mod.toggle === 'rimworld') { G2.rimToggle(mod.id, !mod.enabled); return mod.file; }
+  if (mod.toggle === 'w3settings') { G3.w3Toggle(mod.id, !mod.enabled); return mod.file; }
+  if (mod.toggle === 'group') {
+    for (const f of mod.files || []) { const t = /\.disabled$/i.test(f) ? f.slice(0, -9) : f + '.disabled'; if (mod.enabled ? !/\.disabled$/i.test(f) : /\.disabled$/i.test(f)) fs.renameSync(f, t); }
+    return mod.file;
+  }
   if (mod.toggle === 'factorio') { G2.factorioToggle(ctx.gamePath, mod.id, !mod.enabled); return mod.file; }
   if (mod.toggle === 'plugins-txt') { G2.pluginsTxtToggle(ctx.gameId, mod.name, !mod.enabled); return mod.file; }
   if (mod.toggle === 'dotfolder') {

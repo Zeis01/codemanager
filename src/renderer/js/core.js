@@ -182,6 +182,11 @@ function fmtSize(b) { if (b == null) return ''; if (b < 1024) return b + ' B'; i
 function timeAgo(t) { if (!t) return 'nigdy'; const s = (Date.now() - t) / 1000; if (s < 60) return 'przed chwilą'; if (s < 3600) return Math.floor(s / 60) + ' min temu'; if (s < 86400) return Math.floor(s / 3600) + ' godz. temu'; return new Date(t).toLocaleDateString('pl-PL'); }
 
 function plural(n, one, few, many) { const n10 = n % 10, n100 = n % 100; return `${n} ${n === 1 ? one : (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) ? few : many}`; }
+const STAR_TIP = 'Najlepsza zgodność: pełne sprawdzanie zależności, wersji i konfliktów';
+function compatMark(g) {
+  if (g.compat === 'full') return `<span class="star" title="${STAR_TIP}">★</span>`;
+  return '';
+}
 // Stan globalny
 App.state = { defs: null, detected: null, reports: {}, servers: [], settings: {} };
-Object.assign(App, { runJob, fix, plural, icon, esc, h, $, $$, toast, api, apiQuiet, modal, confirmBox, promptBox, jobModal, gameBadge, renderIssues, healthBar, fmtSize, timeAgo });
+Object.assign(App, { compatMark, STAR_TIP, runJob, fix, plural, icon, esc, h, $, $$, toast, api, apiQuiet, modal, confirmBox, promptBox, jobModal, gameBadge, renderIssues, healthBar, fmtSize, timeAgo });

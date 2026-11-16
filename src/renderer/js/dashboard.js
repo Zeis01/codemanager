@@ -43,8 +43,8 @@ App.views.dashboard = {
     else if (!found.length) gt.innerHTML = '<tr><td colspan="5" class="muted">Nie wykryto obsługiwanych gier. Otwórz „Znalezione gry”, aby wskazać folder ręcznie.</td></tr>';
     for (const g of found) {
       const info = det.games[g.id]; const rep = st.reports[g.id];
-      const stan = !rep ? '<span class="dim">nie sprawdzono</span>' : rep.counts.error ? `<span class="chip error">${App.plural(rep.counts.error, 'błąd', 'błędy', 'błędów')}</span>` : rep.counts.warn ? `<span class="chip warn">${App.plural(rep.counts.warn, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')}</span>` : '<span class="chip ok">zgodne</span>';
-      const tr = h(`<tr style="cursor:pointer"><td class="ic-cell">${gameBadge(g)}</td><td class="nm">${esc(g.name)}</td><td class="muted">${esc(g.id === 'minecraft' ? `${info.instances.length} inst.` : info.source)}</td><td>${rep ? rep.mods.length : '<span class="dim">–</span>'}</td><td>${stan}</td></tr>`);
+      const stan = g.compat === 'none' ? '<span class="dim">instalacja ręczna</span>' : !rep ? '<span class="dim">nie sprawdzono</span>' : rep.counts.error ? `<span class="chip error">${App.plural(rep.counts.error, 'błąd', 'błędy', 'błędów')}</span>` : rep.counts.warn ? `<span class="chip warn">${App.plural(rep.counts.warn, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')}</span>` : '<span class="chip ok">zgodne</span>';
+      const tr = h(`<tr style="cursor:pointer"><td class="ic-cell">${gameBadge(g)}</td><td class="nm">${esc(g.name)} ${App.compatMark(g)}</td><td class="muted">${esc(g.id === 'minecraft' ? `${info.instances.length} inst.` : info.source)}</td><td>${rep ? rep.mods.length : '<span class="dim">–</span>'}</td><td>${stan}</td></tr>`);
       tr.onclick = () => App.go('games', { id: g.id });
       gt.appendChild(tr);
     }

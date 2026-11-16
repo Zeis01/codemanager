@@ -30,8 +30,9 @@ App.views = App.views || {};
     if (!det) { body.innerHTML = '<div class="panel"><p class="muted">Przeszukuję biblioteki Steam i dyski…</p><div class="progress indet"><i></i></div></div>'; return; }
     const found = App.state.defs.games.filter(g => det.games[g.id] && det.games[g.id].found);
     const missing = App.state.defs.games.filter(g => !det.games[g.id] || !det.games[g.id].found);
-    if (det.steam && det.steam.libraries.length) body.appendChild(h(`<p class="dim" style="margin:-8px 0 16px;font-size:12.5px">Biblioteki Steam: ${det.steam.libraries.map(esc).join(' · ')}</p>`));
+    if (det.steam && det.steam.libraries.length) body.appendChild(h(`<p class="dim" style="margin:-6px 0 6px;font-size:12px">Biblioteki Steam: ${det.steam.libraries.map(esc).join(', ')}</p>`));
     else body.appendChild(h(`<div class="note warn" style="margin-bottom:16px">Nie znaleziono Steama. Jeśli jest zainstalowany w nietypowym miejscu, wskaż go w Ustawieniach.</div>`));
+    body.appendChild(h(`<p class="dim" style="margin:0 0 12px;font-size:12px"><span class="star">★</span> najlepsza zgodność – pełne sprawdzanie zależności, wersji i konfliktów. Gry oznaczone „Instalacja ręczna” obsługują instalowanie i włączanie modów, ale bez sprawdzania zgodności.</p>`));
     const grid = h('<div class="grid games"></div>');
     for (const g of found) grid.appendChild(card(g, det.games[g.id]));
     body.appendChild(grid);
@@ -41,14 +42,14 @@ App.views = App.views || {};
       for (const g of missing) g2.appendChild(card(g, null));
       body.appendChild(g2);
     }
-    const uns = App.state.defs.unsupported;
+    const uns = App.state.defs.unsupported || [];
     if (uns.length) body.appendChild(h(`<div class="panel" style="margin-top:28px"><h3>Pominięte z mod managera</h3><p class="muted" style="margin:6px 0 10px;font-size:13px">Te gry nie mają danych, na podstawie których da się rzetelnie sprawdzić zgodność modów:</p>${uns.map(u => `<p style="margin:4px 0;font-size:13px"><b>${esc(u.name)}</b> <span class="muted">– ${esc(u.reason)}</span></p>`).join('')}</div>`));
   }
 
   function card(g, info) {
     const rep = App.state.reports[g.id];
     if (!info) {
-      const c = h(`<div class="gcard missing"><div class="top">${gameBadge(g)}<div><div class="name">${esc(g.name)}</div><div class="src">Nie wykryto</div></div></div>
+      const c = h(`<div class="gcard missing"><div class="top">${gameBadge(g)}<div><div class="name">${esc(g.name)} ${App.compatMark(g)}</div><div class="src">Nie wykryto${g.compat === 'none' ? ' · instalacja ręczna' : ''}</div></div></div>
         <div class="actions"><button class="btn sm">${icon('folder')}Wskaż folder</button></div></div>`);
       $('button', c).onclick = e => { e.stopPropagation(); changePath(g.id); };
       if (g.id === 'minecraft') $('button', c).onclick = e => { e.stopPropagation(); addMcInstance(); };
@@ -56,12 +57,13 @@ App.views = App.views || {};
     }
     const sub = g.id === 'minecraft' ? `${info.instances.length} ${info.instances.length === 1 ? 'instancja' : 'instancji'}` : info.source;
     const c = h(`<div class="gcard" tabindex="0" role="button">
-      <div class="top">${gameBadge(g)}<div style="min-width:0"><div class="name">${esc(g.name)}</div><div class="src">${esc(sub)}</div></div></div>
+      <div class="top">${gameBadge(g)}<div style="min-width:0"><div class="name">${esc(g.name)} ${App.compatMark(g)}</div><div class="src">${esc(sub)}</div></div></div>
+      ${g.compat === 'none' ? '<span class="chip">Instalacja ręczna</span>' : ''}
       <div class="path">${esc(info.path || '')}</div>
       ${info.warning ? `<div class="chip warn" title="${esc(info.warning)}">${icon('alert')}Sprawdź lokalizację</div>` : ''}
       ${rep ? `${healthBar(rep.mods)}<div class="health-legend"><span>${rep.mods.length} modów</span>${rep.counts.error ? `<span class="e">${App.plural(rep.counts.error, 'błąd', 'błędy', 'błędów')}</span>` : ''}${rep.counts.warn ? `<span class="w">${App.plural(rep.counts.warn, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')}</span>` : ''}${!rep.counts.error && !rep.counts.warn ? '<span class="o">Wszystko gra</span>' : ''}</div>` : ''}
       <div class="actions">
-        <button class="btn sm primary" data-a="check">${icon('shield')}${rep ? 'Sprawdź ponownie' : 'Sprawdź zgodność'}</button>
+        ${g.compat === 'none' ? `<button class="btn sm primary" data-a="mods">${icon('puzzle')}Mody</button>` : `<button class="btn sm primary" data-a="check">${icon('shield')}${rep ? 'Sprawdź ponownie' : 'Sprawdź zgodność'}</button>`}
         ${g.id !== 'minecraft' ? `<button class="btn sm icon" data-a="path" title="Zmień lokalizację">${icon('edit')}</button>` : ''}
         <button class="btn sm icon" data-a="open" title="Otwórz folder">${icon('folder')}</button>
       </div></div>`);
@@ -70,6 +72,7 @@ App.views = App.views || {};
       if (!a) return App.go('games', { id: g.id });
       e.stopPropagation();
       if (a.dataset.a === 'check') App.go('games', { id: g.id, tab: 'compat', run: true });
+      if (a.dataset.a === 'mods') App.go('games', { id: g.id, tab: 'mods' });
       if (a.dataset.a === 'path') changePath(g.id);
       if (a.dataset.a === 'open') api('shell:open', info.path);
     };
@@ -104,12 +107,13 @@ App.views = App.views || {};
     const profiles = await api('mods:profiles', g.id);
     let profileId = params.profile || (profiles[0] && profiles[0].id);
     let tab = params.tab || 'mods';
+    if (g.compat === 'none' && tab === 'compat') tab = 'mods';
     el.innerHTML = `
       <button class="back" data-back>${icon('back')}Znalezione gry</button>
-      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)}</h1><p class="lead" style="margin-top:2px">${esc(g.desc)}</p></div>${App.state.icons && App.state.icons.games[g.id] && App.state.icons.games[g.id].header ? `<img class="cover" src="${esc(App.state.icons.games[g.id].header)}" alt="">` : ''}</div>
+      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)} ${App.compatMark(g)}</h1><p class="lead" style="margin-top:2px">${esc(g.desc)}</p></div>${App.state.icons && App.state.icons.games[g.id] && App.state.icons.games[g.id].header ? `<img class="cover" src="${esc(App.state.icons.games[g.id].header)}" alt="">` : ''}</div>
       ${profiles.length > 1 || g.id === 'minecraft' ? `<div class="profile-bar"><label class="muted" for="prof">${g.id === 'minecraft' ? 'Instancja' : 'Profil'}</label><select class="input" id="prof">${profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.mcVersion ? ` – ${esc(p.mcVersion)} ${esc(p.loader || '')}` : ''}</option>`).join('')}</select><span class="path" data-ppath></span></div>` : ''}
       <div class="tabs" role="tablist">
-        <button data-tab="mods">Mody</button><button data-tab="compat">Zgodność</button><button data-tab="get">Pobierz mody</button>
+        <button data-tab="mods">Mody</button>${g.compat === 'none' ? '' : '<button data-tab="compat">Zgodność</button>'}<button data-tab="get">Pobierz mody</button>
         ${(g.loaders && g.loaders.length) ? '<button data-tab="loader">Modloader</button>' : ''}
         <button data-tab="settings">Ustawienia</button>
       </div>
@@ -153,19 +157,21 @@ App.views = App.views || {};
         <button class="btn" data-update>${icon('update')}Aktualizuj wszystko</button>
         <button class="btn" data-add>${icon('plus')}Dodaj mody</button>
         <button class="btn" data-open>${icon('folder')}Folder modów</button>
-        <button class="btn primary" data-check>${icon('shield')}Sprawdź zgodność</button>
+        ${ctx.g.compat === 'none' ? '' : `<button class="btn primary" data-check>${icon('shield')}Sprawdź zgodność</button>`}
       </div>
+      ${ctx.g.compat === 'none' ? `<div class="note" style="margin-bottom:10px">Sprawdzanie zgodności jest wyłączone dla tej gry. Mody możesz instalować${App.state.defs.games.find(x => x.id === ctx.g.id).nexus ? ' z Nexus Mods (zakładka „Pobierz mody”),' : ''} z archiwum lub przeciągając pliki na listę, a także włączać i wyłączać je przełącznikiem.</div>` : ''}
       <div class="table-wrap" data-drop><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Źródło</th><th>Stan</th><th style="width:90px"></th></tr></thead><tbody></tbody></table></div>
       <p class="dim" style="font-size:12.5px;margin-top:8px">Przeciągnij pliki modów na listę, aby je dodać do: <span class="path">${esc(target)}</span>. Mody z Warsztatu Steam włączasz i wyłączasz w grze.</p>`;
     const tbody = $('tbody', c);
     c.insertBefore(profileBar(ctx, rep, () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }), c.firstChild);
-    $('[data-update]', c).onclick = () => updateAll(ctx, () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); });
+    if (ctx.g.compat === 'none' && !App.state.defs.games.find(x => x.id === ctx.g.id).nexus) $('[data-update]', c).remove();
+    else $('[data-update]', c).onclick = () => updateAll(ctx, () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); });
     const draw = () => {
       tbody.innerHTML = '';
       const list = rep.mods.filter(m => !filter || (m.name + ' ' + (m.id || '') + ' ' + (m.key || '')).toLowerCase().includes(filter));
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty" style="padding:30px"><h2>${rep.mods.length ? 'Brak wyników' : 'Brak modów'}</h2><p>${rep.mods.length ? 'Zmień wyszukiwaną frazę.' : 'Dodaj mody przyciskiem powyżej lub przeciągnij pliki tutaj.'}</p></div></td></tr>`; return; }
       for (const m of list) {
-        const st = { ok: ['ok', 'Zgodny'], warn: ['warn', 'Ostrzeżenie'], error: ['error', 'Błąd'], disabled: ['', 'Wyłączony'] }[m.status] || ['', '-'];
+        const st = ctx.g.compat === 'none' ? (m.enabled ? ['', 'Włączony'] : ['', 'Wyłączony']) : ({ ok: ['ok', 'Zgodny'], warn: ['warn', 'Ostrzeżenie'], error: ['error', 'Błąd'], disabled: ['', 'Wyłączony'] }[m.status] || ['', '-']);
         const tr = h(`<tr class="${m.enabled ? '' : 'off'}">
           <td>${m.toggleable ? `<label class="switch" title="${m.enabled ? 'Wyłącz' : 'Włącz'}"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span></span></label>` : `<label class="switch" title="Zarządzane przez grę lub Steam"><input type="checkbox" ${m.enabled ? 'checked' : ''} disabled><span></span></label>`}</td>
           <td><div class="nm">${esc(m.name)}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
@@ -191,7 +197,7 @@ App.views = App.views || {};
     draw();
     $('[data-q]', c).oninput = e => { filter = e.target.value.toLowerCase(); draw(); };
     $('[data-open]', c).onclick = async () => { await api('fs:mkdir', target); api('shell:open', target); };
-    $('[data-check]', c).onclick = () => { delete App.state.reports[ctx.g.id]; App.go('games', { id: ctx.g.id, tab: 'compat', profile: ctx.profileId, run: true }); };
+    if ($('[data-check]', c)) $('[data-check]', c).onclick = () => { delete App.state.reports[ctx.g.id]; App.go('games', { id: ctx.g.id, tab: 'compat', profile: ctx.profileId, run: true }); };
     const addFiles = async files => { if (!files.length) return;
       const archives = files.filter(f => /\.(zip|7z|rar)$/i.test(f) && !['minecraft', 'factorio'].includes(ctx.g.id));
       if (archives.length) { await api('nexus:installLocal', ctx.g.id, ctx.profileId, archives); files = files.filter(f => !archives.includes(f)); }
