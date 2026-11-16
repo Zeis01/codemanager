@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' file: blob: 'unsafe-eval'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: https:; font-src 'self' file: data:; worker-src 'self' file: blob: data:; connect-src 'self' file: ws: wss: https:">
+  <title>CodeManager</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="titlebar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" fill="#1a3126" stroke="#4fd18b" stroke-width="1.6" stroke-linejoin="round"/><path d="m9.5 9.5-2.5 2.5 2.5 2.5M14.5 9.5l2.5 2.5-2.5 2.5" stroke="#4fd18b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      CodeManager
+    </div>
+    <div class="crumb" id="crumb"></div>
+    <div class="winbtns">
+      <button id="wMin" title="Minimalizuj"><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor"/></svg></button>
+      <button id="wMax" title="Maksymalizuj"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
+      <button id="wClose" class="close" title="Zamknij"><svg viewBox="0 0 12 12"><path d="m1 1 10 10M11 1 1 11" stroke="currentColor"/></svg></button>
+    </div>
+  </div>
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Nawigacja"></nav>
+    <main class="main" id="main"></main>
+  </div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <div id="modalRoot"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/games.js"></script>
+  <script src="js/servers.js"></script>
+  <script src="js/installers.js"></script>
+  <script src="js/editor-langs.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/rcon.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
