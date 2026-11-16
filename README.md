@@ -6,16 +6,6 @@ Menedżer modów, serwerów i edytor konfiguracji dla gier – w zielonym motywi
 
 Gotowa wersja: `CodeManager-Setup-x.y.z.exe` (instalator), `CodeManager-Portable-x.y.z.exe` albo `CodeManager-x.y.z-win-x64.zip` (rozpakuj i uruchom `CodeManager.exe`).
 
-Ze źródeł (wymaga Node.js 20+):
-
-```
-npm install
-npm start          # uruchomienie
-npm test           # 71 testów: parsery, checkery, funkcje 1.1 i updater
-npm run dist       # instalator, portable i zip (bez publikacji)
-npm run release    # to samo + publikacja wydania na GitHub (GH_TOKEN)
-```
-
 ## Co potrafi
 
 **Znalezione gry** – wykrywa gry z bibliotek Steam (libraryfolders.vdf + appmanifest), Epic Games, Rockstar Launcher, skanuje typowe foldery na dyskach oraz instancje Minecrafta z oficjalnego launchera, Prism/MultiMC, CurseForge, Modrinth App i ATLauncher. Złą lokalizację można zmienić lub uruchomić wykrywanie ponownie.
@@ -52,37 +42,6 @@ Pominięte celowo: **Brick Rigs** i **Ready or Not** – ich mody nie mają meta
 - **Własne motywy**: pliki `nazwa.theme.json` w folderze motywów (przycisk „Folder motywów”). Wystarczy podać kolory do zmiany – reszta pochodzi z motywu bazowego (`"extends"`). Zmiany są widoczne od razu po zapisaniu pliku. Opis wszystkich kluczy jest w `README.txt` w folderze motywów, a przykład w `czerwony.theme.json`.
 - **Ikony gier** są pobierane z pamięci podręcznej biblioteki Steam, z pliku .exe gry albo (gdy gra nie jest zainstalowana, np. dla serwerów) z grafik Steam, które są zapisywane lokalnie.
 - Plik .exe i instalator mają ikonę taką jak w aplikacji.
-
-## Aktualizacje z GitHub (1.2)
-
-CodeManager sprawdza nowe wydania na GitHub przy starcie i co 6 godzin (Ustawienia → Aktualizacje programu):
-
-- **Instalator** (`CodeManager-Setup-x.y.z.exe`) – aktualizacja przez electron-updater: pobranie w tle, instalacja od razu albo przy zamknięciu.
-- **Portable** i **ZIP** – CodeManager pobiera nowy plik z wydania, sprawdza sumę SHA-256 podaną przez GitHub, zamyka się, podmienia pliki i uruchamia ponownie.
-- Wydania są pobierane z publicznego repozytorium [Zeis01/codemanager](https://github.com/Zeis01/codemanager/releases) – nic nie trzeba konfigurować.
-
-### Jak publikować wydania
-
-```
-git add .
-git commit -m "Opis zmian"
-npm version patch
-git push --follow-tags
-```
-
-Workflow `.github/workflows/release.yml` zbuduje instalator, wersję portable i ZIP i opublikuje je jako wydanie na GitHub.
-
-## Nowości w wersji 1.1
-
-- **Modrinth** – wyszukiwanie i instalacja modów/pluginów z automatycznym pobieraniem zależności, aktualizacja wszystkiego jednym przyciskiem (stare wersje trafiają do kopii), import paczek **.mrpack** (nowa instancja lub serwer).
-- **Nexus Mods** – połączenie kluczem API (szyfrowany), przeglądanie i wyszukiwanie, pliki modów, instalacja (Premium: bezpośrednio; konto darmowe: obsługa linków `nxm://` z przycisku „Mod Manager Download”), inteligentna instalacja archiwów (Stardew, Skyrim/Fallout Data, BepInEx…), sprawdzanie aktualizacji (także po UpdateKeys w SMAPI).
-- **Thunderstore** – instalacja paczek z zależnościami w układzie r2modman, aktualizacja jednym przyciskiem, import profili **r2modman** (kod udostępniania lub plik .r2z).
-- **Analizator błędów** – ponad 50 reguł dla Minecrafta, Javy, BepInEx, MelonLoadera, SMAPI, RimWorld, Factorio, tModLoadera, serwerów (Rust/Oxide, SourceMod, FiveM, DayZ, Arma, SteamCMD) i problemów systemowych. Mapuje ślad stosu na konkretny mod, wyjaśnia „dlaczego” i „co zrobić” prostym językiem, a wiele problemów naprawia przyciskiem.
-- **Naprawy jednym kliknięciem** w raporcie zgodności (brakujące zależności, zła wersja moda, duplikaty, brak loadera, klucze DayZ, gameinfo.gi CS2…) oraz „Napraw automatycznie”.
-- **Profile modów** – zapisz zestaw włączonych modów i przełączaj jednym kliknięciem.
-- **Serwery** – automatyczne kopie zapasowe światów (z rotacją i przywracaniem), zaplanowane restarty z ostrzeżeniem graczy, restart po awarii, zdalna konsola **RCON** (Source RCON, Rust WebRCON, FiveM) także dla serwerów zdalnych.
-- **Nowe serwery**: Palworld, ARK (Ascended i Evolved), Satisfactory (sprawdzanie modów SML), Enshrouded, Space Engineers, proxy Velocity i BungeeCord.
-- **Nowe gry**: RimWorld (wersje, zależności, kolejność ładowania), Stardew Valley (SMAPI), Factorio (zależności + aktualizacje z portalu), Skyrim SE i Fallout 4 (mastery, kolejność, limity, SKSE/F4SE, Address Library), 7 Days to Die.
 
 ## Uwagi
 
