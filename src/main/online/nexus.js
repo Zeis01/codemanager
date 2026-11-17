@@ -62,6 +62,27 @@ async function search(domain, text) {
     return f;
   }
 }
+// Przeglądanie ze stronami (GraphQL v2 – działa także bez klucza API)
+const NX_SORT = { endorsements: 'endorsements', downloads: 'downloads', updated: 'updatedAt', newest: 'createdAt' };
+async function browse(domain, { text = '', sort = 'endorsements', page = 1, perPage = 24 } = {}, fetchImpl = fetch) {
+  const query = `query($filter: ModsFilter, $sort: [ModsSort!], $offset: Int, $count: Int) { mods(filter: $filter, sort: $sort, offset: $offset, count: $count) { totalCount nodes { modId name summary version author pictureUrl thumbnailUrl endorsements downloads updatedAt createdAt adultContent } } }`;
+  const filter = { gameDomainName: [{ value: domain, op: 'EQUALS' }] };
+  if (text) filter.name = [{ value: text, op: 'WILDCARD' }];
+  const h = { 'Content-Type': 'application/json', 'Application-Name': 'CodeManager', 'User-Agent': 'CodeManager', Accept: 'application/json' };
+  if (apiKey) h.apikey = apiKey;
+  const r = await fetchImpl(API + '/v2/graphql', { method: 'POST', headers: h, body: JSON.stringify({ query, variables: { filter, sort: [{ [NX_SORT[sort] || 'endorsements']: { direction: 'DESC' } }], offset: (page - 1) * perPage, count: perPage } }) });
+  let j = null; try { j = await r.json(); } catch { /* */ }
+  if (!r.ok || !j || j.errors || !j.data || !j.data.mods) {
+    if (apiKey && !text) { const l = mapList(await lists(domain, sort === 'newest' ? 'latest_added' : sort === 'updated' ? 'latest_updated' : 'trending')); return { total: l.length, page: 1, perPage: l.length, items: l, note: 'Pokazuję listę z API v1 (bez stron).' }; }
+    throw new Error('Nexus Mods: ' + ((j && j.errors && j.errors[0] && j.errors[0].message) || 'HTTP ' + r.status));
+  }
+  const m = j.data.mods;
+  return { total: m.totalCount || 0, page, perPage, items: m.nodes.map(x => ({ id: x.modId, name: x.name, summary: x.summary, version: x.version, author: x.author, picture: x.thumbnailUrl || x.pictureUrl, endorsements: x.endorsements, downloads: x.downloads, updated: x.updatedAt, adult: !!x.adultContent, url: `https://www.nexusmods.com/${domain}/mods/${x.modId}` })) };
+}
+// opis moda (BBCode → zwykły tekst z akapitami)
+function bbToText(s) {
+  return String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/\[(?:\/)?(?:b|i|u|s|size|color|font|center|right|left|quote|spoiler|heading|line|img|youtube|url|list|code|table|tr|td|th|hr|email)[^\]]*\]/gi, '').replace(/\[\*\]/g, '• ').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
+}
 function mapList(l) {
   const seen = new Set();
   return l.filter(m => m && m.available !== false && !seen.has(m.mod_id) && seen.add(m.mod_id)).map(m => ({ id: m.mod_id, name: m.name, summary: m.summary, version: m.version, author: m.author, picture: m.picture_url, endorsements: m.endorsement_count, downloads: m.mod_downloads, url: `https://www.nexusmods.com/${m.domain_name}/mods/${m.mod_id}` }));
@@ -100,4 +121,4 @@ async function downloadArchive(domain, modId, fileId, nxm, progress) {
 
 function limits() { return lastLimits; }
 
-module.exports = { setKey, validate, modInfo, files, lists, search, md5Search, mainFile, downloadLink, parseNxm, downloadArchive, DOMAINS, limits };
+module.exports = { browse, bbToText, NX_SORT, hasKey: () => !!apiKey, setKey, validate, modInfo, files, lists, search, md5Search, mainFile, downloadLink, parseNxm, downloadArchive, DOMAINS, limits };

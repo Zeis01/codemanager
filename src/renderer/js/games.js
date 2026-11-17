@@ -161,6 +161,7 @@ App.views = App.views || {};
     const target = await api('mods:target', ctx.g.id, ctx.profileId);
     const notes = await App.mt.loadNotes(ctx.g.id);
     let filter = ''; let tagFilter = '';
+    let ws = {}; // dane z Warsztatu Steam: tytuł, opis, czy lokalna kopia jest nieaktualna
     c.innerHTML = `
       <div class="row" style="margin-bottom:12px">
         <div class="searchbox">${icon('search')}<input class="input" placeholder="Szukaj modu" data-q></div>
@@ -190,16 +191,17 @@ App.views = App.views || {};
         const st = ctx.g.compat === 'none' ? (m.enabled ? ['', 'Włączony'] : ['', 'Wyłączony']) : ({ ok: ['ok', 'Zgodny'], warn: ['warn', 'Ostrzeżenie'], error: ['error', 'Błąd'], disabled: ['', 'Wyłączony'] }[m.status] || ['', '-']);
         const tr = h(`<tr class="${m.enabled ? '' : 'off'}">
           <td>${m.toggleable ? `<label class="switch" title="${m.enabled ? 'Wyłącz' : 'Włącz'}"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span></span></label>` : `<label class="switch" title="Zarządzane przez grę lub Steam"><input type="checkbox" ${m.enabled ? 'checked' : ''} disabled><span></span></label>`}</td>
-          <td><div class="nm">${esc(m.name)} ${App.mt.tagChips(notes.notes[App.mt.noteKey(m)])}${(notes.notes[App.mt.noteKey(m)] || {}).lock ? `<span class="tag lock" title="Wersja zablokowana – pomijany przy „Aktualizuj wszystko”">${icon('key')}zablokowany</span>` : ''}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
+          <td><div class="nm">${esc(m.name)} ${ws[m.workshopId] && ws[m.workshopId].outdated ? '<span class="chip warn" title="Na Warsztacie jest nowsza wersja niż na dysku. Steam zaktualizuje subskrybowany mod przy następnym uruchomieniu, kopię z „Pobierz” pobierz ponownie.">nieaktualny</span> ' : ''}${App.mt.tagChips(notes.notes[App.mt.noteKey(m)])}${(notes.notes[App.mt.noteKey(m)] || {}).lock ? `<span class="tag lock" title="Wersja zablokowana – pomijany przy „Aktualizuj wszystko”">${icon('key')}zablokowany</span>` : ''}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}${ws[m.workshopId] && ws[m.workshopId].title !== m.name ? `<div class="sub">Warsztat: ${esc(ws[m.workshopId].title)}</div>` : ''}</td>
           <td class="mono">${esc(m.version || '-')}</td>
           <td><span class="sub">${esc(m.loader ? m.loader + ' · ' : '')}${esc(m.source || '')}${m.size ? ' · ' + fmtSize(m.size) : ''}</span></td>
           <td><span class="chip ${st[0]}">${st[1]}</span></td>
-          <td style="text-align:right"><button class="btn sm ghost icon ${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'on' : ''}" data-a="lock" title="${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'Odblokuj aktualizacje' : 'Zablokuj wersję (nie aktualizuj)'}">${icon('key')}</button><button class="btn sm ghost icon" data-a="note" title="Notatka i tagi">${icon('edit')}</button>${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
+          <td style="text-align:right"><button class="btn sm ghost icon ${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'on' : ''}" data-a="lock" title="${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'Odblokuj aktualizacje' : 'Zablokuj wersję (nie aktualizuj)'}">${icon('key')}</button><button class="btn sm ghost icon" data-a="note" title="Notatka i tagi">${icon('edit')}</button>${m.workshopId ? `<button class="btn sm ghost icon" data-a="ws" title="Strona w Warsztacie Steam">${icon('globe')}</button>` : ''}${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
         const sw = $('input', tr);
         if (m.toggleable) sw.onchange = async () => { try { await api('mods:toggle', m, ctx.g.id); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); } catch { sw.checked = !sw.checked; } };
         tr.onclick = async e => {
           const a = e.target.closest('[data-a]'); if (!a) return;
           if (a.dataset.a === 'show') api('shell:show', m.file);
+          if (a.dataset.a === 'ws') api('shell:external', `https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}`);
           if (a.dataset.a === 'note') App.mt.editNote(ctx.g.id, m, notes, draw);
           if (a.dataset.a === 'lock') { const k = App.mt.noteKey(m); const on = !(notes.notes[k] || {}).lock; await api('notes:lock', ctx.g.id, m, on); notes.notes[k] = { ...(notes.notes[k] || { tags: [], note: '' }), lock: on || undefined }; toast(on ? `${m.name}: wersja zablokowana` : `${m.name}: aktualizacje odblokowane`); draw(); }
           if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza ${App.state.settings.programTrash === false ? 'systemowego' : 'CodeManager – przywrócisz go przez 30 dni (Narzędzia → Kosz)'}.`, 'Przenieś do kosza', true)) { await api('mods:remove', m.file, ctx.g.id, m.name); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
@@ -207,15 +209,18 @@ App.views = App.views || {};
         // wiersz klikalny → pokaż problemy moda
         tr.ondblclick = () => {
           const iss = rep.issues.filter(i => i.mod === m.key || i.mod === m.name);
-          const mb = h(`<div><div data-iss></div><div class="row" style="margin-top:12px"><button class="btn sm" data-aim>${icon('bulb')}Co robi ten mod? (AI)</button></div><div data-ai style="margin-top:10px"></div></div>`);
+          const w = ws[m.workshopId];
+          const mb = h(`<div>${w ? `<div class="ws-info">${w.preview ? `<img src="${esc(w.preview)}" alt="">` : ''}<div><div class="t">${esc(w.title)}${w.outdated ? ' <span class="chip warn">nieaktualny</span>' : ''}</div><div class="d">${esc((w.description || '').slice(0, 600))}</div><div class="sub">Warsztat #${esc(m.workshopId)} · ${fmtN(w.subscriptions)} subskrypcji · aktualizacja ${w.updated ? new Date(w.updated).toLocaleDateString('pl-PL') : '?'}</div></div></div>` : ''}<div data-iss></div><div class="row" style="margin-top:12px"><button class="btn sm" data-aim>${icon('bulb')}Co robi ten mod? (AI)</button></div><div data-ai style="margin-top:10px"></div></div>`);
           $('[data-iss]', mb).appendChild(iss.length ? renderIssues(iss) : h('<p class="muted">Brak problemów dla tego moda.</p>'));
-          $('[data-aim]', mb).onclick = () => App.mt.aiPanel($('[data-ai]', mb), { title: m.name, ask: history => window.cm.call('ai:explainMod', ctx.g.id, { name: m.name, id: m.id, version: m.version }, history) });
+          $('[data-aim]', mb).onclick = () => App.mt.aiPanel($('[data-ai]', mb), { title: m.name, ask: history => window.cm.call('ai:explainMod', ctx.g.id, { name: w ? w.title : m.name, id: m.id || m.workshopId, version: m.version, description: w ? w.description : '' }, history) });
           modal({ title: m.name, wide: true, body: mb });
         };
         tbody.appendChild(tr);
       }
     };
     draw();
+    const wsItems = rep.mods.filter(m => m.workshopId).map(m => ({ id: m.workshopId, file: m.file }));
+    if (wsItems.length) App.apiQuiet('workshop:local', wsItems).then(r => { ws = r || {}; if (c.isConnected) draw(); }).catch(() => {});
     $('[data-q]', c).oninput = e => { filter = e.target.value.toLowerCase(); draw(); };
     $('[data-tagf]', c).onchange = e => { tagFilter = e.target.value; draw(); };
     $('[data-open]', c).onclick = async () => { await api('fs:mkdir', target); api('shell:open', target); };
@@ -457,12 +462,13 @@ App.views = App.views || {};
     if (g.id === 'minecraft') parts.push('modrinth');
     if (g.checker === 'bepinex') parts.push('thunderstore');
     if (domain) parts.push('nexus');
+    if (g.workshop) parts.push('workshop');
     if (!parts.length) {
-      c.innerHTML = `<div class="empty"><h2>Brak serwisu z modami dla tej gry</h2><p>${g.id === 'factorio' ? 'Mody Factorio pobierzesz w grze (menu Mody). CodeManager zaktualizuje je przyciskiem „Aktualizuj wszystko”.' : 'Mody do tej gry pobierzesz z Warsztatu Steam – CodeManager wykryje je automatycznie.'}</p></div>`;
+      c.innerHTML = `<div class="empty"><h2>Brak serwisu z modami dla tej gry</h2><p>${g.id === 'factorio' ? 'Mody Factorio pobierzesz w grze (menu Mody). CodeManager zaktualizuje je przyciskiem „Aktualizuj wszystko”.' : 'Dla tej gry nie ma serwisu z modami, z którego CodeManager mógłby pobierać.'}</p></div>`;
       return;
     }
     let src = parts[0];
-    c.innerHTML = `<div class="row" style="margin-bottom:14px"><div class="seg">${parts.map(p => `<button data-src="${p}">${{ modrinth: 'Modrinth', thunderstore: 'Thunderstore', nexus: 'Nexus Mods' }[p]}</button>`).join('')}</div><span style="flex:1"></span>${domain ? `<button class="btn sm" data-local>${icon('archive')}Zainstaluj z archiwum…</button>` : ''}</div><div data-body></div>`;
+    c.innerHTML = `<div class="row" style="margin-bottom:14px"><div class="seg">${parts.map(p => `<button data-src="${p}">${{ modrinth: 'Modrinth', thunderstore: 'Thunderstore', nexus: 'Nexus Mods', workshop: 'Warsztat Steam' }[p]}</button>`).join('')}</div><span style="flex:1"></span>${domain ? `<button class="btn sm" data-local>${icon('archive')}Zainstaluj z archiwum…</button>` : ''}</div><div data-body></div>`;
     const body = $('[data-body]', c);
     const local = $('[data-local]', c);
     if (local) local.onclick = async () => { const f = await api('dialog:files', 'Wybierz archiwa modów (.zip, .7z)', [{ name: 'Archiwa', extensions: ['zip', '7z', 'rar'] }]); if (!f.length) return; if (!(await App.mt.archiveWarn(g.id, f))) return; const r = await api('nexus:installLocal', g.id, ctx.profileId, f); toast(`Zainstalowano (${r.length} elementów)`); delete App.state.reports[g.id]; };
@@ -471,9 +477,26 @@ App.views = App.views || {};
       if (src === 'modrinth') getModrinth(body, ctx, { gameId: g.id, profileId: ctx.profileId }, { mcVersion: ctx.prof && ctx.prof.mcVersion, loader: ctx.prof && ctx.prof.loader });
       if (src === 'thunderstore') getThunderstore(body, ctx, { gameId: g.id, profileId: ctx.profileId });
       if (src === 'nexus') getNexus(body, ctx, domain, nx);
+      if (src === 'workshop') getWorkshop(body, ctx);
     };
     $$('[data-src]', c).forEach(b => b.onclick = () => { src = b.dataset.src; show(); });
     show();
+  }
+
+  // ---------- wspólne: przełącznik stron i karta ----------
+  const fmtN = n => Intl.NumberFormat('pl-PL', { notation: 'compact' }).format(n || 0);
+  function pager(box, { page, total, perPage, onPage }) {
+    const pages = Math.max(1, Math.ceil((total || 0) / perPage));
+    box.innerHTML = pages <= 1 ? '' : `<div class="pager"><button class="btn sm" data-p="prev" ${page <= 1 ? 'disabled' : ''}>${icon('back')}Poprzednia</button><span class="dim">Strona ${page} z ${pages.toLocaleString('pl-PL')} · ${(total || 0).toLocaleString('pl-PL')} wyników</span><button class="btn sm" data-p="next" ${page >= pages ? 'disabled' : ''}>Następna${icon('chevron')}</button></div>`;
+    box.onclick = e => { const b = e.target.closest('[data-p]'); if (!b || b.disabled) return; onPage(b.dataset.p === 'prev' ? page - 1 : page + 1); };
+  }
+  App.pager = pager;
+  // okno ze stroną moda: obrazek, opis, statystyki i przyciski
+  function modPage({ title, image, gallery = [], meta = [], text, md, actions = [], url }) {
+    const body = h(`<div class="modpage">${image || gallery.length ? `<div class="mp-gallery">${[image, ...gallery].filter(Boolean).slice(0, 5).map(u => `<img src="${esc(u)}" alt="">`).join('')}</div>` : ''}
+      ${meta.length ? `<div class="mp-meta">${meta.map(([k, v]) => `<span>${esc(k)}: <b>${esc(v)}</b></span>`).join('')}</div>` : ''}
+      <div class="mp-text ai-msg">${md ? App.mt.md(md) : `<p>${esc(text || '').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`}</div></div>`);
+    return modal({ title, wide: true, body, actions: [...actions, ...(url ? [{ label: 'Otwórz w przeglądarce', icon: 'globe', onClick: () => { api('shell:external', url); return false; } }] : []), { label: 'Zamknij' }] });
   }
 
   async function installModrinth(target, id, title, channel) {
@@ -485,27 +508,38 @@ App.views = App.views || {};
   App.installModrinth = installModrinth;
   function getModrinth(body, ctx, target, opts) {
     const type = opts.type || 'mod';
-    body.innerHTML = `<div class="row" style="margin-bottom:12px"><div class="searchbox">${icon('search')}<input class="input" style="width:340px" placeholder="Szukaj na Modrinth (np. sodium, create, worldedit)" data-q></div>
-      <select class="input" style="width:auto" data-sort><option value="relevance">Trafność</option><option value="downloads">Pobrania</option><option value="updated">Ostatnio aktualizowane</option><option value="newest">Najnowsze</option></select>
-      <span class="dim">Filtr: ${esc(opts.loader || 'dowolny loader')} · ${esc(opts.mcVersion || 'dowolna wersja')}</span></div><div class="results" data-res></div>`;
+    const PER = 20; let page = 1;
+    body.innerHTML = `<div class="row" style="margin-bottom:12px"><div class="searchbox">${icon('search')}<input class="input" style="width:340px" placeholder="${type === 'shader' ? 'Szukaj shaderów na Modrinth' : type === 'resourcepack' ? 'Szukaj paczek zasobów na Modrinth' : 'Szukaj na Modrinth (np. sodium, create, worldedit)'}" data-q></div>
+      <select class="input" style="width:auto" data-sort><option value="relevance">Trafność</option><option value="downloads">Pobrania</option><option value="follows">Obserwujący</option><option value="updated">Ostatnio aktualizowane</option><option value="newest">Najnowsze</option></select>
+      <span class="dim">Filtr: ${esc(opts.loader || 'dowolny loader')} · ${esc(opts.mcVersion || 'dowolna wersja')}</span></div><div class="results" data-res></div><div data-pager></div>`;
     const res = $('[data-res]', body); const q = $('[data-q]', body); const sort = $('[data-sort]', body);
     let timer;
     const run = async () => {
       res.innerHTML = '<div class="progress indet"><i></i></div>';
-      let r; try { r = await App.apiQuiet('modrinth:search', q.value.trim(), { mcVersion: opts.mcVersion, loader: opts.loader, type, sort: sort.value, limit: 30 }); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+      let r; try { r = await App.apiQuiet('modrinth:search', q.value.trim(), { mcVersion: opts.mcVersion, loader: opts.loader, type, sort: sort.value, limit: PER, offset: (page - 1) * PER }); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
       res.innerHTML = r.hits.length ? '' : '<p class="muted">Brak wyników dla tej wersji i loadera.</p>';
-      if (!q.value.trim() && (type === 'mod' || type === 'plugin')) App.mt.recommendBox(res, target, id => installModrinth(target, id, id));
+      if (!q.value.trim() && page === 1 && (type === 'mod' || type === 'plugin')) App.mt.recommendBox(res, target, id => installModrinth(target, id, id));
       for (const m of r.hits) {
-        const card = h(`<div class="mcard">${m.icon ? `<img src="${esc(m.icon)}" alt="">` : `<div class="mcard-ph">${esc(m.title.slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t">${esc(m.title)} <span class="dim">· ${esc(m.author)}</span></div><div class="mcard-d">${esc(m.description)}</div>
-          <div class="mcard-m"><span>${App.icon('download')}${Intl.NumberFormat('pl-PL', { notation: 'compact' }).format(m.downloads)}</span>${m.client === 'required' && m.server === 'unsupported' ? '<span class="chip">tylko klient</span>' : ''}${m.server === 'required' && m.client === 'unsupported' ? '<span class="chip">tylko serwer</span>' : ''}</div></div>
-          <div class="mcard-a"><button class="btn sm primary" data-i>${icon('download')}Zainstaluj</button><button class="btn sm ghost" data-o>${icon('globe')}</button></div></div>`);
+        const card = h(`<div class="mcard">${m.icon ? `<img src="${esc(m.icon)}" alt="">` : `<div class="mcard-ph">${esc(m.title.slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t"><a href="#" data-d>${esc(m.title)}</a> <span class="dim">· ${esc(m.author)}</span></div><div class="mcard-d">${esc(m.description)}</div>
+          <div class="mcard-m"><span>${App.icon('download')}${fmtN(m.downloads)}</span>${m.client === 'required' && m.server === 'unsupported' ? '<span class="chip">tylko klient</span>' : ''}${m.server === 'required' && m.client === 'unsupported' ? '<span class="chip">tylko serwer</span>' : ''}</div></div>
+          <div class="mcard-a"><button class="btn sm primary" data-i>${icon('download')}Zainstaluj</button><button class="btn sm ghost" data-o title="Otwórz stronę">${icon('globe')}</button></div></div>`);
         $('[data-o]', card).onclick = () => api('shell:external', m.url);
         $('[data-i]', card).onclick = () => installModrinth(target, m.id, m.title, opts.installCh);
+        $('[data-d]', card).onclick = async e => {
+          e.preventDefault();
+          try {
+            const pg = await App.apiQuiet('modrinth:page', m.id);
+            const md = modPage({ title: pg.title, image: pg.icon, gallery: pg.gallery, meta: [['Pobrania', fmtN(pg.downloads)], ['Obserwujący', fmtN(pg.followers)], ['Aktualizacja', new Date(pg.updated).toLocaleDateString('pl-PL')]], md: pg.body || pg.description, url: pg.url,
+              actions: [{ label: 'Zainstaluj', primary: true, icon: 'download', onClick: () => { setTimeout(() => installModrinth(target, m.id, m.title, opts.installCh), 0); } }] });
+            return md;
+          } catch (err) { toast(err.message, 'warn'); }
+        };
         res.appendChild(card);
       }
+      pager($('[data-pager]', body), { page, total: r.total, perPage: PER, onPage: p => { page = p; run(); body.scrollIntoView({ block: 'start' }); } });
     };
-    q.oninput = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
-    sort.onchange = run;
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; run(); }, 350); };
+    sort.onchange = () => { page = 1; run(); };
     run();
   }
   App.getModrinth = getModrinth;
@@ -524,37 +558,45 @@ App.views = App.views || {};
   }
   App.getThunderstore = getThunderstore;
 
+  // ---------- Nexus Mods: przeglądanie ze stronami (także bez klucza), strona moda, pliki ----------
   function getNexus(body, ctx, domain, nx) {
-    if (!nx.connected) {
-      body.innerHTML = `<div class="panel" style="max-width:720px"><h3>Połącz konto Nexus Mods</h3><p class="muted" style="font-size:13px">Aby przeglądać i aktualizować mody z Nexus Mods, wklej osobisty klucz API (nexusmods.com → Ustawienia konta → API Keys). Klucz jest przechowywany zaszyfrowany na tym komputerze.</p>
-        <div class="inline-input"><input class="input mono" type="password" placeholder="Klucz API" data-k><button class="btn primary" data-save>Połącz</button></div><button class="btn sm ghost" style="margin-top:10px" data-open>${icon('globe')}Otwórz stronę z kluczami</button></div>`;
-      $('[data-open]', body).onclick = () => api('shell:external', 'https://www.nexusmods.com/users/myaccount?tab=api');
-      $('[data-save]', body).onclick = async () => { const u = await api('nexus:setKey', $('[data-k]', body).value); toast(`Połączono jako ${u.name}${u.premium ? ' (Premium)' : ''}`); getNexus(body, ctx, domain, await api('nexus:status')); };
-      return;
-    }
-    body.innerHTML = `<div class="row" style="margin-bottom:12px"><div class="searchbox">${icon('search')}<input class="input" style="width:340px" placeholder="Szukaj na Nexus Mods" data-q></div><button class="btn" data-upd>${icon('update')}Sprawdź aktualizacje</button>
-      <span class="dim">${esc(nx.user ? nx.user.name : '')}${nx.user && nx.user.premium ? ' · Premium' : ' · konto darmowe: pobieranie przez przycisk na stronie Nexus'}${nx.nxmRegistered ? '' : ''}</span></div>
-      ${!nx.user || !nx.user.premium ? `<div class="note" style="margin-bottom:12px">Na koncie darmowym Nexus wymaga kliknięcia „Mod Manager Download” na stronie moda. ${nx.nxmRegistered ? 'CodeManager jest ustawiony do obsługi tych linków – pobieranie zacznie się automatycznie.' : '<a href="#" data-nxm>Ustaw CodeManager jako obsługę linków nxm://</a>, aby takie pobrania trafiały prosto tutaj.'}</div>` : ''}
-      <div data-note></div><div class="results" data-res></div>`;
+    const PER = 20; let page = 1;
+    const premium = nx.user && nx.user.premium;
+    body.innerHTML = `<div class="row" style="margin-bottom:12px"><div class="searchbox">${icon('search')}<input class="input" style="width:340px" placeholder="Szukaj na Nexus Mods" data-q></div>
+      <select class="input" style="width:auto" data-sort><option value="endorsements">Najwięcej polubień</option><option value="downloads">Najwięcej pobrań</option><option value="updated">Ostatnio aktualizowane</option><option value="newest">Najnowsze</option></select>
+      ${nx.connected ? `<button class="btn" data-upd>${icon('update')}Sprawdź aktualizacje</button>` : ''}<span class="dim">${nx.connected ? `${esc(nx.user ? nx.user.name : '')}${premium ? ' · Premium' : ' · konto darmowe'}` : ''}</span></div>
+      ${!nx.connected ? `<div class="note" style="margin-bottom:12px">Przeglądasz bez konta. Do pobierania i podglądu plików połącz konto Nexus Mods: <div class="inline-input" style="margin-top:8px;max-width:520px"><input class="input mono" type="password" placeholder="Klucz API (nexusmods.com → Ustawienia konta → API Keys)" data-k><button class="btn primary" data-save>Połącz</button><button class="btn" data-open title="Strona z kluczami">${icon('globe')}</button></div></div>` : !premium ? `<div class="note" style="margin-bottom:12px">Na koncie darmowym Nexus wymaga kliknięcia „Mod Manager Download” na stronie moda. ${nx.nxmRegistered ? 'CodeManager obsługuje te linki – pobieranie zacznie się automatycznie.' : '<a href="#" data-nxm>Ustaw CodeManager jako obsługę linków nxm://</a>, aby pobrania trafiały prosto tutaj.'}</div>` : ''}
+      <div data-note></div><div class="results" data-res></div><div data-pager></div>`;
+    const sv = $('[data-save]', body); if (sv) sv.onclick = async () => { const u = await api('nexus:setKey', $('[data-k]', body).value); toast(`Połączono jako ${u.name}${u.premium ? ' (Premium)' : ''}`); getNexus(body, ctx, domain, await api('nexus:status')); };
+    const op = $('[data-open]', body); if (op) op.onclick = () => api('shell:external', 'https://www.nexusmods.com/users/myaccount?tab=api');
     const nxml = $('[data-nxm]', body); if (nxml) nxml.onclick = async e => { e.preventDefault(); await api('nexus:registerNxm'); toast('CodeManager obsługuje teraz linki nxm://'); getNexus(body, ctx, domain, await api('nexus:status')); };
-    $('[data-upd]', body).onclick = async () => { const r = await api('nexus:updates', ctx.g.id); modal({ title: 'Aktualizacje z Nexus Mods', wide: true, body: renderIssues(r) }); };
-    const res = $('[data-res]', body); const q = $('[data-q]', body);
+    const up = $('[data-upd]', body); if (up) up.onclick = async () => { const r = await api('nexus:updates', ctx.g.id); modal({ title: 'Aktualizacje z Nexus Mods', wide: true, body: renderIssues(r) }); };
+    const res = $('[data-res]', body); const q = $('[data-q]', body); const sort = $('[data-sort]', body);
     let timer;
+    const needKey = () => { toast('Połącz konto Nexus Mods (klucz API powyżej), aby pobierać mody.', 'warn', 6000); const k = $('[data-k]', body); if (k) k.focus(); };
     const run = async () => {
       res.innerHTML = '<div class="progress indet"><i></i></div>';
-      let list; try { list = await App.apiQuiet('nexus:search', ctx.g.id, q.value.trim()); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
-      $('[data-note]', body).innerHTML = list.note ? `<p class="dim" style="font-size:12.5px">${esc(list.note)}</p>` : '';
-      res.innerHTML = list.length ? '' : '<p class="muted">Brak wyników.</p>';
-      for (const m of list) {
-        const card = h(`<div class="mcard">${m.picture ? `<img src="${esc(m.picture)}" alt="" style="object-fit:cover">` : `<div class="mcard-ph">${esc((m.name || '?').slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t">${esc(m.name)} <span class="dim">· ${esc(m.author || '')} · v${esc(m.version || '?')}</span></div><div class="mcard-d">${esc(m.summary || '')}</div>
-          <div class="mcard-m"><span>${icon('download')}${Intl.NumberFormat('pl-PL', { notation: 'compact' }).format(m.downloads || 0)}</span><span>♥ ${Intl.NumberFormat('pl-PL', { notation: 'compact' }).format(m.endorsements || 0)}</span></div></div>
-          <div class="mcard-a"><button class="btn sm primary" data-i>${icon('download')}Pliki</button><button class="btn sm ghost" data-o>${icon('globe')}</button></div></div>`);
+      let r; try { r = await App.apiQuiet('nexus:browse', ctx.g.id, { text: q.value.trim(), sort: sort.value, page, perPage: PER }); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+      $('[data-note]', body).innerHTML = r.note ? `<p class="dim" style="font-size:12.5px">${esc(r.note)}</p>` : '';
+      res.innerHTML = r.items.length ? '' : '<p class="muted">Brak wyników.</p>';
+      for (const m of r.items) {
+        const card = h(`<div class="mcard">${m.picture && !m.adult ? `<img src="${esc(m.picture)}" alt="" style="object-fit:cover">` : `<div class="mcard-ph">${esc((m.name || '?').slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t"><a href="#" data-d>${esc(m.name)}</a> <span class="dim">· ${esc(m.author || '')} · v${esc(m.version || '?')}</span>${m.adult ? ' <span class="chip warn">18+</span>' : ''}</div><div class="mcard-d">${esc(m.summary || '')}</div>
+          <div class="mcard-m"><span>${icon('download')}${fmtN(m.downloads)}</span><span>♥ ${fmtN(m.endorsements)}</span>${m.updated ? `<span class="dim">${new Date(m.updated).toLocaleDateString('pl-PL')}</span>` : ''}</div></div>
+          <div class="mcard-a"><button class="btn sm primary" data-i>${icon('download')}Pliki</button><button class="btn sm ghost" data-o title="Otwórz stronę">${icon('globe')}</button></div></div>`);
         $('[data-o]', card).onclick = () => api('shell:external', m.url);
-        $('[data-i]', card).onclick = () => nexusFiles(ctx, m);
+        $('[data-i]', card).onclick = () => (nx.connected ? nexusFiles(ctx, m) : needKey());
+        $('[data-d]', card).onclick = async e => {
+          e.preventDefault();
+          let pg = null; if (nx.connected) { try { pg = await App.apiQuiet('nexus:modPage', ctx.g.id, m.id); } catch { pg = null; } }
+          modPage({ title: m.name, image: pg ? pg.picture : (m.adult ? null : m.picture), meta: [['Pobrania', fmtN((pg || m).downloads)], ['Polubienia', fmtN((pg || m).endorsements)], ['Wersja', (pg || m).version || '?'], ['Autor', (pg || m).author || '?']], text: pg ? pg.description : `${m.summary || ''}\n\nPełny opis zobaczysz po połączeniu konta Nexus Mods albo w przeglądarce.`, url: m.url,
+            actions: [{ label: 'Pliki do pobrania', primary: true, icon: 'download', onClick: () => { setTimeout(() => (nx.connected ? nexusFiles(ctx, m) : needKey()), 0); } }] });
+        };
         res.appendChild(card);
       }
+      pager($('[data-pager]', body), { page, total: r.total, perPage: r.perPage || PER, onPage: p => { page = p; run(); body.scrollIntoView({ block: 'start' }); } });
     };
-    q.oninput = () => { clearTimeout(timer); timer = setTimeout(run, 450); };
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; run(); }, 450); };
+    sort.onchange = () => { page = 1; run(); };
     run();
   }
   async function nexusFiles(ctx, m) {
@@ -569,6 +611,48 @@ App.views = App.views || {};
       if (r && r.needsBrowser) api('shell:external', r.url);
       else if (r) delete App.state.reports[ctx.g.id];
     };
+  }
+
+  // ---------- Warsztat Steam ----------
+  async function getWorkshop(body, ctx) {
+    const st = await api('workshop:status', ctx.g.id);
+    const PER = 20; let page = 1;
+    body.innerHTML = `<div class="row" style="margin-bottom:12px">${st.hasKey ? `<div class="searchbox">${icon('search')}<input class="input" style="width:300px" placeholder="Szukaj w Warsztacie" data-q></div><select class="input" style="width:auto" data-sort><option value="trend">Popularne (30 dni)</option><option value="top">Najwyżej oceniane</option><option value="subscriptions">Najwięcej subskrypcji</option><option value="updated">Ostatnio aktualizowane</option><option value="newest">Najnowsze</option></select>` : ''}
+      <div class="inline-input" style="flex:1;min-width:280px;max-width:520px"><input class="input" placeholder="Link lub numer przedmiotu Warsztatu" data-link><button class="btn" data-go>${icon('search')}Pokaż</button></div></div>
+      ${st.hasKey ? '' : `<div class="note" style="margin-bottom:12px">Wklej link do moda z Warsztatu, aby go pobrać lub zasubskrybować. Żeby przeglądać i wyszukiwać mody tutaj, dodaj darmowy klucz Steam Web API w <a href="#" data-wsset>Ustawieniach</a>.</div>`}
+      <p class="dim" style="font-size:12.5px;margin:0 0 10px">„Subskrybuj w Steam” otwiera stronę w kliencie Steam. Steam pobierze mod, a CodeManager wykryje go i sprawdzi w zakładkach Mody i Zgodność. „Pobierz” używa SteamCMD bez logowania – działa tylko dla gier, które na to pozwalają.</p>
+      <div class="results ws-grid" data-res></div><div data-pager></div>`;
+    const res = $('[data-res]', body);
+    const wss = $('[data-wsset]', body); if (wss) wss.onclick = e => { e.preventDefault(); App.go('settings', { section: 'workshop' }); };
+    const card = it => {
+      const el = h(`<div class="mcard">${it.preview ? `<img src="${esc(it.preview)}" alt="" style="object-fit:cover">` : `<div class="mcard-ph">${esc(it.title.slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t"><a href="#" data-d>${esc(it.title)}</a></div><div class="mcard-d">${esc((it.description || '').slice(0, 220))}</div>
+        <div class="mcard-m"><span>${icon('download')}${fmtN(it.subscriptions)}</span>${it.size ? `<span class="dim">${App.fmtSize(it.size)}</span>` : ''}${it.updated ? `<span class="dim">${new Date(it.updated).toLocaleDateString('pl-PL')}</span>` : ''}</div></div>
+        <div class="mcard-a"><button class="btn sm primary" data-sub>${icon('link')}Subskrybuj w Steam</button><button class="btn sm" data-dl>${icon('download')}Pobierz</button><button class="btn sm ghost" data-o title="Otwórz stronę">${icon('globe')}</button></div></div>`);
+      $('[data-o]', el).onclick = () => api('shell:external', it.url);
+      $('[data-sub]', el).onclick = async () => { await api('workshop:subscribe', it.id); toast('Otwieram Steam – kliknij „Subskrybuj”. Po pobraniu odśwież zakładkę Mody.'); };
+      $('[data-dl]', el).onclick = async () => { const r = await App.runJob(`Warsztat: ${it.title}`, jobId => window.cm.call('workshop:download', jobId, ctx.g.id, ctx.profileId, it.id), { doneMsg: x => `Zainstalowano ${x.name}.` }); if (r) delete App.state.reports[ctx.g.id]; };
+      $('[data-d]', el).onclick = e => { e.preventDefault(); modPage({ title: it.title, image: it.preview, meta: [['Subskrypcje', fmtN(it.subscriptions)], ['Rozmiar', App.fmtSize(it.size) || '?'], ['Aktualizacja', it.updated ? new Date(it.updated).toLocaleDateString('pl-PL') : '?']], text: it.description || '', url: it.url, actions: [{ label: 'Subskrybuj w Steam', primary: true, icon: 'link', onClick: () => { api('workshop:subscribe', it.id); return false; } }] }); };
+      return el;
+    };
+    $('[data-go]', body).onclick = async () => {
+      const v = $('[data-link]', body).value.trim(); if (!v) return;
+      res.innerHTML = '<div class="progress indet"><i></i></div>'; $('[data-pager]', body).innerHTML = '';
+      try { const it = await App.apiQuiet('workshop:item', v); res.innerHTML = ''; if (it.appid && st.appid && it.appid !== st.appid) res.appendChild(h('<div class="note warn" style="margin-bottom:8px">Ten przedmiot jest z Warsztatu innej gry.</div>')); res.appendChild(card(it)); }
+      catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; }
+    };
+    $('[data-link]', body).onkeydown = e => { if (e.key === 'Enter') $('[data-go]', body).click(); };
+    if (!st.hasKey) return;
+    const q = $('[data-q]', body); const sort = $('[data-sort]', body); let timer;
+    const run = async () => {
+      res.innerHTML = '<div class="progress indet"><i></i></div>';
+      let r; try { r = await App.apiQuiet('workshop:search', ctx.g.id, { text: q.value.trim(), sort: sort.value, page, perPage: PER }); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
+      res.innerHTML = r.items.length ? '' : '<p class="muted">Brak wyników.</p>';
+      r.items.forEach(it => res.appendChild(card(it)));
+      pager($('[data-pager]', body), { page, total: r.total, perPage: PER, onPage: p => { page = p; run(); body.scrollIntoView({ block: 'start' }); } });
+    };
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { page = 1; run(); }, 450); };
+    sort.onchange = () => { page = 1; run(); };
+    run();
   }
 
   // ---------- importy ----------

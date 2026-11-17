@@ -20,6 +20,8 @@ App.views.settings = {
           <button class="btn primary" data-save>${icon('save')}Zapisz</button>
           <h2 style="margin:26px 0 10px">Nexus Mods</h2>
           <div data-nexus></div>
+          <h2 style="margin:26px 0 10px" id="set-workshop">Warsztat Steam</h2>
+          <div data-ws></div>
         </div>
         <div class="panel">
           <h2 style="margin-bottom:14px">Edytor</h2>
@@ -122,6 +124,17 @@ App.views.settings = {
       const si = $('[data-site]', nxBox); if (si) si.onclick = () => api('shell:external', 'https://www.nexusmods.com/users/myaccount?tab=api');
     };
     drawNx();
+    const wsBox = $('[data-ws]', el);
+    const drawWs = async () => {
+      const st = await api('steam:status');
+      wsBox.innerHTML = st.hasKey
+        ? `<p style="margin:0 0 10px">Klucz Steam Web API zapisany <span class="chip ok">aktywny</span></p><p class="dim" style="font-size:12.5px;margin:0 0 10px">Możesz przeglądać i wyszukiwać mody Warsztatu w zakładce „Pobierz mody”.</p><button class="btn danger" data-wout>Usuń klucz</button>`
+        : `<div class="field"><label>Klucz Steam Web API (opcjonalnie)</label><div class="inline-input"><input class="input mono" type="password" data-wkey placeholder="wklej klucz"><button class="btn primary" data-wcon>Zapisz</button></div><span class="hint">Darmowy klucz ze steamcommunity.com/dev/apikey (jako domenę wpisz np. localhost). Potrzebny tylko do przeglądania i wyszukiwania – tytuły, opisy i wykrywanie nieaktualnych modów działają bez niego. Klucz jest szyfrowany na tym komputerze.</span></div><button class="btn sm ghost" data-wsite>${icon('globe')}Otwórz stronę z kluczem</button>`;
+      const c = $('[data-wcon]', wsBox); if (c) c.onclick = async () => { await api('steam:setKey', $('[data-wkey]', wsBox).value); toast('Zapisano klucz Steam Web API'); drawWs(); };
+      const o = $('[data-wout]', wsBox); if (o) o.onclick = async () => { await api('steam:setKey', null); drawWs(); };
+      const si = $('[data-wsite]', wsBox); if (si) si.onclick = () => api('shell:external', 'https://steamcommunity.com/dev/apikey');
+    };
+    drawWs();
     const upBox = $('[data-upd]', el);
     const drawUp = async () => {
       const c = await api('update:config');
@@ -198,6 +211,7 @@ App.views.settings = {
     $('[data-aikurl]', el).onclick = () => { const p = provs.find(x => x.id === aiSel.value); if (p && p.keyUrl) api('shell:external', p.keyUrl); };
     $('[data-aimodels]', el).onclick = async () => { try { await aiSave(); const list = await window.cm.call('ai:models'); $('#ai-models').innerHTML = list.map(m => `<option value="${esc(m)}">`).join(''); toast(`Dostępne modele: ${list.length} – wybierz z listy w polu Model`); } catch (err) { toast(err.message, 'warn', 7000); } };
     await drawAi();
+    if (params.section === 'workshop') setTimeout(() => $('#set-workshop', el).scrollIntoView({ behavior: 'smooth' }), 100);
     if (params.section === 'ai') setTimeout(() => $('#set-ai', el).scrollIntoView({ behavior: 'smooth' }), 100);
     async function save() {
       const patch = {};

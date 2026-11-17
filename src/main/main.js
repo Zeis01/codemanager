@@ -35,7 +35,7 @@ const pool = new Pool({ size: Math.min(3, Math.max(1, require('os').cpus().lengt
 const work = (op, args, fallback) => pool.run(op, args, fallback);
 const detectCfg = () => ({ settings: config.settings, games: config.games });
 const runDetect = () => work('detect', { config: detectCfg() }, () => detect.detectAll(config));
-function checkGame(id, info, prof, settings) { return work('check', { gameId: id, info, profile: prof, settings }, () => compat.check(id, info, prof, settings)); }
+function checkGame(id, info, prof, settings) { return work('check', { gameId: id, info, profile: prof, settings }, () => compat.check(id, info, prof, settings)).then(r => require('./online/workshop').annotate(r)); }
 
 function createWindow() {
   win = new BrowserWindow({
@@ -119,7 +119,7 @@ handle('mods:profiles', id => compat.profiles(id, infoFor(id)));
 handle('mods:check', (id, profileId) => {
   const info = infoFor(id);
   const prof = compat.profiles(id, info).find(p => p.id === profileId);
-  return checkGame(id, info, prof, { ...((config.games[id] || {}).settings || {}), __nexus: nexusRegFor(id) });
+  return checkGame(id, info, prof, { ...((config.games[id] || {}).settings || {}), __nexus: nexusRegFor(id) })
 });
 handle('mods:online', (id, profileId) => {
   const info = infoFor(id);
@@ -1266,5 +1266,73 @@ handle('ai:explainMods', async (target, history) => {
 });
 handle('ai:explainMod', async (gameId, mod, history) => {
   const g = gameDef(gameId);
-  return aiAsk(`Co robi mod „${mod.name}”${mod.id ? ` (id: ${mod.id})` : ''}${mod.version ? `, wersja ${mod.version}` : ''} do gry ${g.name}? Krótko: do czego służy, czy jest po stronie klienta czy serwera, z czym zwykle bywa niezgodny i czy wymaga innych modów. Jeśli nie znasz tego moda, powiedz to wprost zamiast zgadywać.`, history);
+  return aiAsk(`Co robi mod „${mod.name}”${mod.id ? ` (id: ${mod.id})` : ''}${mod.version ? `, wersja ${mod.version}` : ''} do gry ${g.name}?${mod.description ? `\nOpis ze strony moda (Warsztat Steam / Nexus):\n${String(mod.description).slice(0, 3000)}\n` : ''} Krótko: do czego służy, czy jest po stronie klienta czy serwera, z czym zwykle bywa niezgodny i czy wymaga innych modów. Jeśli nie znasz tego moda, powiedz to wprost zamiast zgadywać.`, history);
+});
+
+// =====================================================================
+// Pobieranie modów: Nexus Mods ze stronami i opisem, Warsztat Steam
+// =====================================================================
+const workshop = require('./online/workshop');
+handle('nexus:browse', (gameId, opts) => nexus.browse(nexus.DOMAINS[gameId], opts || {}));
+handle('nexus:modPage', async (gameId, modId) => {
+  const domain = nexus.DOMAINS[gameId];
+  const m = await nexus.modInfo(domain, modId);
+  if (!m) throw new Error('Nie znaleziono moda.');
+  return { id: m.mod_id, name: m.name, summary: m.summary, description: nexus.bbToText(m.description).slice(0, 20000), picture: m.picture_url, version: m.version, author: m.author, endorsements: m.endorsement_count, downloads: m.mod_downloads, updated: (m.updated_timestamp || 0) * 1000, adult: !!m.contains_adult_content, url: `https://www.nexusmods.com/${domain}/mods/${m.mod_id}` };
+});
+handle('modrinth:page', async id => {
+  const p = await modrinth.project(id); if (!p) throw new Error('Nie znaleziono projektu.');
+  return { id: p.id, title: p.title, description: p.description, body: String(p.body || '').slice(0, 20000), icon: p.icon_url, downloads: p.downloads, followers: p.followers, updated: p.updated, categories: p.categories, client: p.client_side, server: p.server_side, gallery: (p.gallery || []).slice(0, 6).map(g => g.url), url: `https://modrinth.com/${p.project_type}/${p.slug}`, source: p.source_url, issues: p.issues_url };
+});
+
+// ---------- Warsztat Steam ----------
+function steamKey() { const e = config.settings.steamKeyEnc; if (!e) return null; try { return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(e, 'base64')) : Buffer.from(e, 'base64').toString('utf8'); } catch { return null; } }
+handle('steam:setKey', async k => {
+  if (k && k.trim()) { if (!/^[0-9A-F]{32}$/i.test(k.trim())) throw new Error('Klucz Steam Web API to 32 znaki (cyfry i litery A–F).'); await workshop.search(4000, { key: k.trim(), perPage: 1 }); }
+  if (!k) delete config.settings.steamKeyEnc; else config.settings.steamKeyEnc = (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(k.trim()) : Buffer.from(k.trim(), 'utf8')).toString('base64'); saveConfig(); return !!k;
+});
+handle('steam:status', () => ({ hasKey: !!steamKey() }));
+const wsApp = gameId => { const g = gameDef(gameId); return g.workshop || null; };
+handle('workshop:status', gameId => ({ appid: wsApp(gameId), hasKey: !!steamKey() }));
+handle('workshop:search', (gameId, opts) => workshop.search(wsApp(gameId), { ...(opts || {}), key: steamKey() }));
+handle('workshop:item', async input => { const id = workshop.parseId(input); if (!id) throw new Error('Wklej link do przedmiotu Warsztatu (…/filedetails/?id=…) albo jego numer.'); const d = await workshop.details([id]); if (!d[id]) throw new Error('Nie znaleziono przedmiotu albo jest prywatny.'); return d[id]; });
+handle('workshop:subscribe', id => shell.openExternal(`steam://url/CommunityFilePage/${encodeURIComponent(String(id).replace(/\D/g, ''))}`));
+// przedmioty Warsztatu wśród zainstalowanych modów: tytuły z Steam i wykrycie nieaktualnych kopii
+handle('workshop:local', async items => {
+  const d = await workshop.details(items.map(i => i.id));
+  const out = {};
+  for (const it of items) {
+    const x = d[it.id]; if (!x) continue;
+    const local = it.file ? workshop.localMtime(it.file) : 0;
+    out[it.id] = { ...x, outdated: !!(local && x.updated && local + 10 * 60000 < x.updated) };
+  }
+  return out;
+});
+handle('workshop:download', async (jobId, gameId, profileId, id) => {
+  const log = jobLog(jobId); const g = gameDef(gameId); const appid = wsApp(gameId);
+  if (!appid) throw new Error('Ta gra nie ma Warsztatu Steam.');
+  const { ensureSteamCmd } = require('./servers/defs');
+  const bin = await ensureSteamCmd({ userData, log, progress: jobProg(jobId) });
+  const dl = path.join(userData, 'workshop-cache');
+  log(`SteamCMD: pobieranie przedmiotu ${id} (konto anonimowe)…`);
+  let out = '';
+  const code = await new Promise((res, rej) => {
+    const p = require('child_process').spawn(bin, ['+force_install_dir', dl, '+login', 'anonymous', '+workshop_download_item', String(appid), String(id), 'validate', '+quit'], { cwd: path.dirname(bin), windowsHide: true });
+    const h = d => { const t = String(d); out += t; t.split(/\r?\n/).filter(x => x.trim()).forEach(x => log(x.trim())); };
+    p.stdout.on('data', h); p.stderr.on('data', h); p.on('error', rej); p.on('close', res);
+  });
+  const item = path.join(dl, 'steamapps', 'workshop', 'content', String(appid), String(id));
+  if (!U.isDir(item) || /ERROR! Download item \d+ failed/i.test(out)) {
+    throw new Error(/Access Denied|No subscription|failed \(Failure\)/i.test(out) || code !== 0
+      ? 'Steam nie pozwala pobrać tego przedmiotu bez konta, które ma grę. Użyj „Subskrybuj w Steam” – Steam pobierze mod, a CodeManager go wykryje.'
+      : 'SteamCMD nie pobrał przedmiotu.');
+  }
+  const ctx = profileCtx(gameId, profileId);
+  await autoSnapshot(gameId, profileId, 'przed instalacją moda');
+  const paths = workshop.installItem(g, item, String(id), ctx.modsDir);
+  const det = (await workshop.details([String(id)]).catch(() => ({})))[String(id)];
+  const files = paths.flatMap(p => (U.isDir(p) ? U.walk(p).map(f => path.relative(ctx.info.path, path.join(p, f))) : [path.relative(ctx.info.path, p)])).map(f => f.split(path.sep).join('/'));
+  nexusReg.add({ gameId, modId: 'workshop:' + id, local: true, name: det ? det.title : `Warsztat #${id}`, paths, files });
+  log(`✔ Skopiowano do ${ctx.modsDir}`);
+  return { name: det ? det.title : id, paths };
 });

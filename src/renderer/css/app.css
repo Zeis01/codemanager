@@ -587,3 +587,21 @@ iframe.webmap { width: 100%; height: 60vh; border: 1px solid var(--line); border
 .ai-wait .progress { flex: 0 0 160px; }
 .ai-ask { display: flex; gap: 6px; margin-top: 10px; }
 .ai-ask .input { flex: 1; }
+
+/* strony wyników i strona moda */
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 14px 0 4px; }
+.pager .btn svg { width: 14px; height: 14px; }
+.mcard-t a { color: inherit; text-decoration: none; }
+.mcard-t a:hover { color: var(--jade); text-decoration: underline; }
+.modpage { display: flex; flex-direction: column; gap: 12px; }
+.mp-gallery { display: flex; gap: 8px; overflow-x: auto; }
+.mp-gallery img { height: 150px; max-width: 280px; border-radius: var(--r); object-fit: cover; background: var(--bg4); flex: none; }
+.mp-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text2); }
+.mp-meta b { color: var(--text); font-weight: 600; }
+.mp-text { max-height: 46vh; overflow: auto; font-size: 13px; padding-right: 6px; }
+.mp-text img { max-width: 100%; }
+.ws-info { display: flex; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg2); margin-bottom: 12px; }
+.ws-info img { width: 96px; height: 96px; border-radius: var(--r); object-fit: cover; flex: none; }
+.ws-info .t { font-weight: 600; }
+.ws-info .d { color: var(--text2); font-size: 12.5px; margin: 4px 0; white-space: pre-line; max-height: 110px; overflow: auto; }
+.ws-info .sub { font-size: 11.5px; color: var(--text3); }

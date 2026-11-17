@@ -1,5 +1,21 @@
 # Historia zmian
 
+## CodeManager 1.6.2
+
+### Pobieranie modów
+- **Nexus Mods ze stronami:** w zakładce „Pobierz mody” wyniki są podzielone na strony (Poprzednia / Następna, „Strona X z Y”), tak jak w Modrinth. Do wyboru sortowanie: najwięcej polubień, najwięcej pobrań, ostatnio aktualizowane, najnowsze.
+- **Przeglądanie Nexus Mods bez konta:** listę i wyszukiwanie zobaczysz bez klucza API. Klucz jest potrzebny dopiero do pobierania i podglądu plików.
+- **Strona moda:** kliknięcie nazwy otwiera okno z obrazkiem, statystykami i opisem (Nexus Mods z połączonym kontem, Modrinth z pełnym opisem i galerią).
+- **Modrinth:** strony wyników i sortowanie po liczbie obserwujących.
+
+### Warsztat Steam
+- **Nowe źródło „Warsztat Steam”** w zakładce „Pobierz mody” dla gier z Warsztatem (Project Zomboid, Garry's Mod, RimWorld, Don't Starve Together, tModLoader, ETS2, Transport Fever 2, Hearts of Iron IV, Teardown i inne).
+  - Wklej link lub numer przedmiotu, aby zobaczyć jego kartę.
+  - Z darmowym kluczem Steam Web API (Ustawienia → Warsztat Steam) możesz przeglądać i wyszukiwać mody ze stronami i sortowaniem.
+- **„Subskrybuj w Steam”** otwiera stronę przedmiotu w kliencie Steam. Steam pobiera mod, a CodeManager go wykrywa.
+- **„Pobierz”** ściąga przedmiot przez SteamCMD (konto anonimowe) i kopiuje go do folderu modów gry w formacie, którego gra oczekuje. Przed kopiowaniem robi automatyczną migawkę. Jeśli Steam nie pozwala pobrać bez konta z grą, pojawia się podpowiedź, żeby użyć subskrypcji.
+- **Analiza modów z Warsztatu:** w zakładce Mody przy modach z Warsztatu widać tytuł ze Steam, przycisk strony Warsztatu i oznaczenie „nieaktualny”, gdy na Warsztacie jest nowsza wersja niż na dysku. Po dwukrotnym kliknięciu widać opis, liczbę subskrypcji i datę aktualizacji, a „Co robi ten mod? (AI)” korzysta z opisu z Warsztatu.
+
 ## CodeManager 1.6.1
 
 ### Sztuczna inteligencja (opcjonalnie)
