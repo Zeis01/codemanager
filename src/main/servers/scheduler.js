@@ -10,9 +10,15 @@ const { TYPES, worldPaths } = require('./defs2');
 const pad = n => String(n).padStart(2, '0');
 const stamp = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 
+// Na Windows zawsze systemowy tar (bsdtar z System32) – tar z Gita/MSYS traktuje „C:” jak adres zdalnego hosta
+function tarBin() {
+  if (process.platform !== 'win32') return 'tar';
+  const sys = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+  return U.exists(sys) ? sys : 'tar';
+}
 function runTar(args, cwd) {
   return new Promise((res, rej) => {
-    const p = spawn('tar', args, { cwd, windowsHide: true });
+    const p = spawn(tarBin(), args, { cwd, windowsHide: true });
     let err = '';
     p.stderr.on('data', d => { err += d; });
     p.on('error', e => rej(new Error('Nie można uruchomić tar: ' + e.message)));
@@ -143,4 +149,4 @@ class Scheduler {
   stop() { clearInterval(this.timer); }
 }
 
-module.exports = { Scheduler, runTar };
+module.exports = { Scheduler, runTar, tarBin };

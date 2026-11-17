@@ -98,7 +98,7 @@ function extractTar(file, dest) {
   return new Promise((res, rej) => {
     fs.mkdirSync(dest, { recursive: true });
     const flags = /\.xz$/.test(file) ? '-xJf' : '-xzf';
-    const p = spawn('tar', [flags, file, '-C', dest]);
+    const p = spawn(require('./servers/scheduler').tarBin(), [flags, file, '-C', dest], { windowsHide: true });
     p.on('close', c => c === 0 ? res() : rej(new Error('tar zakończył się kodem ' + c)));
     p.on('error', rej);
   });
