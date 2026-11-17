@@ -23,9 +23,11 @@ App.views = App.views || {};
     const hl = r.headline;
     box.innerHTML = '';
     const head = h(`<div class="explain ${hl.tone}"><div class="explain-ic">${icon(hl.tone === 'ok' ? 'ok' : hl.tone === 'warn' ? 'alert' : 'bulb')}</div><div style="flex:1"><div class="explain-t">${esc(hl.text)}</div><div class="muted" style="margin-top:4px">${esc(hl.sub)}</div>
-      <div class="dim" style="font-size:12px;margin-top:8px">Przeanalizowano ${r.stats.lines.toLocaleString('pl-PL')} wierszy · ${r.stats.errorLines} wierszy z błędami${r.url ? ` · pobrano z ${esc(r.url)}` : ''}</div></div><button class="btn sm" data-report title="Lista modów, wersje, system i błąd w jednym pliku – do wklejenia na Discorda lub forum">${icon('file')}Raport do wysłania</button></div>`);
+      <div class="dim" style="font-size:12px;margin-top:8px">Przeanalizowano ${r.stats.lines.toLocaleString('pl-PL')} wierszy · ${r.stats.errorLines} wierszy z błędami${r.url ? ` · pobrano z ${esc(r.url)}` : ''}</div></div><div class="row" style="flex-direction:column;align-items:stretch;gap:6px"><button class="btn sm" data-ai title="Wyjaśnienie przez sztuczną inteligencję (Twój klucz API)">${icon('bulb')}Wyjaśnij z AI</button><button class="btn sm" data-report title="Lista modów, wersje, system i błąd w jednym pliku – do wklejenia na Discorda lub forum">${icon('file')}Raport do wysłania</button></div></div>`);
     $('[data-report]', head).onclick = () => reportModal(target, r, file || r.file);
     box.appendChild(head);
+    const aiBox = h('<div class="ai-slot"></div>'); box.appendChild(aiBox);
+    $('[data-ai]', head).onclick = () => App.mt.aiPanel(aiBox, { title: 'Wyjaśnienie AI', ask: history => window.cm.call('ai:explainLog', { file: file || r.file, text: file || r.file ? null : r.__text, target, findings: r.findings.map(f => ({ level: f.level, title: f.title, mod: f.mod })) }, history) });
     for (const f of r.findings) box.appendChild(findingCard(f, target));
   }
   async function reportModal(target, analysis, file) {
@@ -99,7 +101,7 @@ App.views = App.views || {};
         $('[data-file]', src).onclick = async () => { const f = (await api('dialog:files', 'Wybierz log', [{ name: 'Logi', extensions: ['log', 'txt', 'json', 'rpt', 'adm'] }, { name: 'Wszystkie', extensions: ['*'] }]))[0]; if (f) analyzeFile(out, f, {}, null); };
         const goUrl = async () => { const u = $('[data-url]', src).value.trim(); if (!u) return; out.innerHTML = '<div class="panel"><p class="muted" style="margin-top:0">Pobieram log…</p><div class="progress indet"><i></i></div></div>'; try { const r = await App.apiQuiet('analyzer:url', u, {}); renderResult(out, r, null, r.file); } catch (e) { out.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; } };
         $('[data-urlgo]', src).onclick = goUrl; $('[data-url]', src).onkeydown = e => { if (e.key === 'Enter') goUrl(); };
-        $('[data-go]', src).onclick = async () => { const t = $('[data-t]', src).value; if (!t.trim()) return; out.innerHTML = '<div class="progress indet"><i></i></div>'; renderResult(out, await api('analyzer:text', t), null, null); };
+        $('[data-go]', src).onclick = async () => { const t = $('[data-t]', src).value; if (!t.trim()) return; out.innerHTML = '<div class="progress indet"><i></i></div>'; const rr = await api('analyzer:text', t); rr.__text = t; renderResult(out, rr, null, null); };
         const drop = $('[data-drop]', src);
         drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
         drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) analyzeFile(out, window.cm.pathForFile(f), {}, null); };

@@ -1,5 +1,18 @@
 # Historia zmian
 
+## CodeManager 1.6.1
+
+### Sztuczna inteligencja (opcjonalnie)
+- **Własny klucz API** w Ustawieniach → Sztuczna inteligencja. Do wyboru:
+  - Anthropic (Claude), OpenAI (ChatGPT), Google Gemini, OpenRouter, Mistral AI;
+  - Ollama na własnym komputerze (bez klucza);
+  - dowolny serwer zgodny z API OpenAI.
+- **Konfiguracja:** model wpiszesz ręcznie albo wybierzesz z listy pobranej od dostawcy. Przycisk „Sprawdź połączenie” wysyła próbne zapytanie. Klucz jest szyfrowany i zapisany tylko na tym komputerze.
+- **Analizator błędów:** przycisk „Wyjaśnij z AI” przy wyniku analizy. AI dostaje fragment logu (wiersze z błędami i końcówkę), wynik reguł i listę modów, a w odpowiedzi podaje przyczynę i kroki do wykonania.
+- **Zgodność modów:** przycisk „Zapytaj AI” w zakładce Zgodność gry i w zakładce z pluginami/modami serwera. AI ocenia cały zestaw: co naprawić najpierw i które mody są zbędne lub się dublują.
+- **Pojedynczy mod:** „Co robi ten mod? (AI)” po dwukrotnym kliknięciu moda na liście.
+- Każdą odpowiedź można dopytać. AI działa tylko po kliknięciu, ścieżki z nazwą konta są ukrywane przed wysłaniem, a odpowiedzi przychodzą w języku interfejsu.
+
 ## CodeManager 1.6.0
 
 ### Szybkość

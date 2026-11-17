@@ -207,7 +207,10 @@ App.views = App.views || {};
         // wiersz klikalny → pokaż problemy moda
         tr.ondblclick = () => {
           const iss = rep.issues.filter(i => i.mod === m.key || i.mod === m.name);
-          modal({ title: m.name, wide: true, body: iss.length ? renderIssues(iss) : h('<p class="muted">Brak problemów dla tego moda.</p>') });
+          const mb = h(`<div><div data-iss></div><div class="row" style="margin-top:12px"><button class="btn sm" data-aim>${icon('bulb')}Co robi ten mod? (AI)</button></div><div data-ai style="margin-top:10px"></div></div>`);
+          $('[data-iss]', mb).appendChild(iss.length ? renderIssues(iss) : h('<p class="muted">Brak problemów dla tego moda.</p>'));
+          $('[data-aim]', mb).onclick = () => App.mt.aiPanel($('[data-ai]', mb), { title: m.name, ask: history => window.cm.call('ai:explainMod', ctx.g.id, { name: m.name, id: m.id, version: m.version }, history) });
+          modal({ title: m.name, wide: true, body: mb });
         };
         tbody.appendChild(tr);
       }
@@ -242,8 +245,10 @@ App.views = App.views || {};
           <div class="o"><div class="n">${rep.mods.filter(m => m.enabled).length}</div><div class="l">aktywne mody</div></div>
           <div class="grow" style="min-width:160px">${healthBar(rep.mods)}</div>
           ${['minecraft', 'lethalcompany', 'repo', 'contentwarning', 'factorio'].includes(ctx.g.id) ? `<button class="btn" data-online>${icon('globe')}Sprawdź online</button>` : ''}
+          <button class="btn" data-aimods title="Ocena zestawu modów przez sztuczną inteligencję (Twój klucz API)">${icon('bulb')}Zapytaj AI</button>
           <button class="btn primary" data-run>${icon('refresh')}Sprawdź ponownie</button>
         </div>
+        <div data-aislot></div>
         <div class="grid" style="grid-template-columns:minmax(0,1fr) 320px;align-items:start">
           <div><div class="filter-chips"><button data-f="all" class="active">Wszystkie</button><button data-f="error">Błędy</button><button data-f="warn">Ostrzeżenia</button><button data-f="info">Informacje</button></div><div data-list></div><div data-onlineres></div></div>
           <div class="panel"><h3 style="margin-bottom:10px">Kontekst sprawdzenia</h3><dl class="meta-list">${Object.entries(rep.meta).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
@@ -256,6 +261,7 @@ App.views = App.views || {};
       drawList();
       $$('[data-f]', c).forEach(b => b.onclick = () => { filter = b.dataset.f; $$('[data-f]', c).forEach(x => x.classList.toggle('active', x === b)); drawList(); });
       $('[data-run]', c).onclick = go;
+      $('[data-aimods]', c).onclick = () => App.mt.aiPanel($('[data-aislot]', c), { title: 'Ocena modów przez AI', ask: history => window.cm.call('ai:explainMods', { gameId: ctx.g.id, profileId: ctx.profileId }, history) });
       const ob = $('[data-online]', c);
       if (ob) ob.onclick = async () => {
         ob.disabled = true; ob.innerHTML = icon('refresh', 'spin') + 'Sprawdzanie…';

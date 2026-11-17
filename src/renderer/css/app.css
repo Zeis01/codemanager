@@ -566,3 +566,24 @@ iframe.webmap { width: 100%; height: 60vh; border: 1px solid var(--line); border
 .tcol { display: grid; grid-template-columns: 32px 1fr 110px; align-items: center; gap: 8px; font-size: 13px; }
 .tcol input[type=color] { width: 32px; height: 26px; padding: 0; border: 1px solid var(--line2); border-radius: 4px; background: none; cursor: pointer; }
 .tcol .input { height: 26px; font-size: 12px; }
+
+/* ===================== 1.6.1: AI ===================== */
+.ai-slot:empty, [data-aislot]:empty { display: none; }
+[data-aislot] { margin-bottom: 12px; }
+.ai-panel { border: 1px solid var(--info); border-radius: var(--r); background: var(--bg2); padding: 10px 14px; margin-top: 12px; }
+.ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ai-head > svg { width: 16px; height: 16px; color: var(--info); }
+.ai-head .grow { flex: 1; }
+.ai-body { max-height: 60vh; overflow: auto; }
+.ai-msg { line-height: 1.55; }
+.ai-msg h4 { margin: 12px 0 4px; font-size: 13.5px; }
+.ai-msg p { margin: 6px 0; }
+.ai-msg ol, .ai-msg ul { margin: 6px 0; padding-left: 22px; }
+.ai-msg li { margin: 3px 0; }
+.ai-msg code { font-family: var(--mono); font-size: 12px; background: var(--input); padding: 1px 4px; border-radius: 3px; }
+.ai-code { font-family: var(--mono); font-size: 12px; background: var(--input); padding: 8px 10px; border-radius: 4px; overflow: auto; white-space: pre; }
+.ai-user { margin: 10px 0 4px; padding: 6px 10px; background: var(--bg3); border-radius: var(--r); font-size: 13px; }
+.ai-wait { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.ai-wait .progress { flex: 0 0 160px; }
+.ai-ask { display: flex; gap: 6px; margin-top: 10px; }
+.ai-ask .input { flex: 1; }

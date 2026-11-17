@@ -1215,3 +1215,56 @@ handle('webmap:accept', id => {
   fs.writeFileSync(m.core, /accept-download\s*:/.test(t) ? t.replace(/accept-download\s*:\s*\w+/, 'accept-download: true') : t + '\naccept-download: true\n');
   return true;
 });
+
+// =====================================================================
+// Wersja 1.6.1: sztuczna inteligencja z kluczem API użytkownika
+// =====================================================================
+const ai = require('./ai');
+function aiKey(provider) {
+  const enc = ((config.settings.aiKeys || {})[provider]);
+  if (!enc) return null;
+  try { return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(enc, 'base64')) : Buffer.from(enc, 'base64').toString('utf8'); } catch { return null; }
+}
+function aiReady() { const c = ai.cfg(config.settings); return !!(c && c.enabled && (!c.needsKey || aiKey(c.id)) && c.base && c.model); }
+const aiLang = () => (config.settings.language === 'en' ? 'en' : 'pl');
+handle('ai:providers', () => Object.entries(ai.PROVIDERS).map(([id, p]) => ({ id, name: p.name, model: p.model, base: p.base, needsKey: p.needsKey, keyUrl: p.keyUrl })));
+handle('ai:status', () => { const c = ai.cfg(config.settings); return { ready: aiReady(), provider: c ? c.id : null, model: c ? c.model : null, baseUrl: (config.settings.ai || {}).baseUrl || '', enabled: c ? c.enabled : false, keys: Object.fromEntries(Object.keys(ai.PROVIDERS).map(p => [p, !!aiKey(p)])) }; });
+handle('ai:configure', o => {
+  config.settings.ai = { ...(config.settings.ai || {}), ...o };
+  if (o.key !== undefined) {
+    const p = config.settings.ai.provider; delete config.settings.ai.key;
+    config.settings.aiKeys = config.settings.aiKeys || {};
+    if (o.key) config.settings.aiKeys[p] = (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(o.key.trim()) : Buffer.from(o.key.trim(), 'utf8')).toString('base64');
+    else delete config.settings.aiKeys[p];
+  }
+  saveConfig(); return aiReady();
+});
+handle('ai:models', () => { const c = ai.cfg(config.settings); return ai.models(c, aiKey(c && c.id)); });
+handle('ai:test', async () => { const c = ai.cfg(config.settings); const t0 = Date.now(); const r = await ai.chat(c, aiKey(c && c.id), { system: 'Odpowiadaj jednym krótkim zdaniem.', messages: [{ role: 'user', content: 'Napisz „Połączenie działa” i nic więcej.' }], maxTokens: 30 }); return { reply: r, ms: Date.now() - t0, model: c.model }; });
+async function aiAsk(prompt, history = []) {
+  if (!aiReady()) throw new Error('AI nie jest skonfigurowane – wybierz dostawcę i dodaj klucz w Ustawieniach.');
+  const c = ai.cfg(config.settings);
+  const messages = [{ role: 'user', content: reportTxt.anonymize(prompt) }, ...history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: reportTxt.anonymize(String(m.content).slice(0, 4000)) }))];
+  return ai.chat(c, aiKey(c.id), { system: ai.system(aiLang()), messages });
+}
+// kontekst rozmowy budowany w procesie głównym; interfejs przesyła tylko kolejne pytania
+handle('ai:explainLog', async ({ file, text, target, findings }, history) => {
+  let log = text;
+  if (!log && file) log = String(file).startsWith('console:') ? servers.getLog(file.slice(8)).join('\n') : analyzer.readTail(file);
+  let mods = null; let meta = null; let name = null;
+  try {
+    if (target && target.gameId) { const rep = await gameReport(target.gameId, target.profileId); mods = rep.mods; meta = rep.meta; name = gameDef(target.gameId).name; }
+    else if (target && target.serverId) { const s = servers.get(target.serverId); name = `serwer ${(STYPES[s.type] || {}).name || s.type}${s.variant ? ' ' + s.variant : ''}${s.version ? ' ' + s.version : ''}`; const rep = await work('serverCheck', { server: s }).catch(() => null); if (rep) { mods = rep.mods; meta = rep.meta; } }
+  } catch { /* bez listy modów */ }
+  return aiAsk(ai.logPrompt({ target: name, log, findings, mods, meta }), history);
+});
+handle('ai:explainMods', async (target, history) => {
+  let rep, name;
+  if (target.serverId) { const s = servers.get(target.serverId); rep = await work('serverCheck', { server: s }); name = `serwer ${s.name} (${(STYPES[s.type] || {}).name})`; }
+  else { rep = await gameReport(target.gameId, target.profileId); const ctx = profileCtx(target.gameId, target.profileId); name = gameDef(target.gameId).name + (ctx.prof && ctx.prof.name !== 'Folder gry' ? ` – ${ctx.prof.name}` : ''); }
+  return aiAsk(ai.modsPrompt({ target: name, report: rep }), history);
+});
+handle('ai:explainMod', async (gameId, mod, history) => {
+  const g = gameDef(gameId);
+  return aiAsk(`Co robi mod „${mod.name}”${mod.id ? ` (id: ${mod.id})` : ''}${mod.version ? `, wersja ${mod.version}` : ''} do gry ${g.name}? Krótko: do czego służy, czy jest po stronie klienta czy serwera, z czym zwykle bywa niezgodny i czy wymaga innych modów. Jeśli nie znasz tego moda, powiedz to wprost zamiast zgadywać.`, history);
+});

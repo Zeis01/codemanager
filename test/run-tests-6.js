@@ -105,6 +105,35 @@ t('powiadomienie o alarmie ma czytelny opis', () => {
   assert(/pamięć 2048 MB \(limit 1000 MB\)/.test(message('alarm', { name: 'S' }, { kind: 'mem', value: 2048 * 1048576, limit: 1000, minutes: 5 })));
 });
 
+t('AI: zapytania do Anthropic, OpenAI-zgodnych i Gemini oraz czytelne błędy', async () => {
+  const ai = require('../src/main/ai');
+  const calls = [];
+  const fake = reply => async (url, o) => { calls.push({ url, h: o.headers, b: o.body ? JSON.parse(o.body) : null }); return { ok: true, status: 200, text: async () => JSON.stringify(reply) }; };
+  const msg = { system: 'S', messages: [{ role: 'user', content: 'pytanie' }] };
+  assert.strictEqual(await ai.chat(ai.cfg({ ai: { provider: 'anthropic' } }), 'k1', msg, fake({ content: [{ type: 'text', text: 'odp A' }] })), 'odp A');
+  assert(calls[0].url.endsWith('/v1/messages') && calls[0].h['x-api-key'] === 'k1' && calls[0].b.system === 'S' && calls[0].b.model === 'claude-sonnet-5-5');
+  assert.strictEqual(await ai.chat(ai.cfg({ ai: { provider: 'openrouter', model: 'x/y' } }), 'k2', msg, fake({ choices: [{ message: { content: 'odp B' } }] })), 'odp B');
+  assert(calls[1].url === 'https://openrouter.ai/api/v1/chat/completions' && calls[1].h.authorization === 'Bearer k2' && calls[1].b.messages[0].role === 'system');
+  assert.strictEqual(await ai.chat(ai.cfg({ ai: { provider: 'gemini' } }), 'k3', { ...msg, messages: [...msg.messages, { role: 'assistant', content: 'a' }] }, fake({ candidates: [{ content: { parts: [{ text: 'odp C' }] } }] })), 'odp C');
+  assert(/models\/gemini-2\.5-flash:generateContent$/.test(calls[2].url) && calls[2].b.contents[1].role === 'model');
+  assert.strictEqual(await ai.chat(ai.cfg({ ai: { provider: 'ollama' } }), null, msg, fake({ choices: [{ message: { content: 'lokalnie' } }] })), 'lokalnie');
+  assert(!calls[3].h.authorization && calls[3].url.startsWith('http://localhost:11434/v1'));
+  await assert.rejects(ai.chat(ai.cfg({ ai: { provider: 'openai' } }), null, msg, fake({})), /Brak klucza/);
+  await assert.rejects(ai.chat(ai.cfg({ ai: { provider: 'openai' } }), 'zly', msg, async () => ({ ok: false, status: 401, text: async () => JSON.stringify({ error: { message: 'Incorrect API key' } }) })), /Incorrect API key.*klucz API/);
+  await assert.rejects(ai.chat(ai.cfg({ ai: { provider: 'custom' } }), null, msg, fake({})), /adres serwera/);
+  const list = await ai.models(ai.cfg({ ai: { provider: 'gemini' } }), 'k', fake({ models: [{ name: 'models/gemini-x', supportedGenerationMethods: ['generateContent'] }, { name: 'models/embed', supportedGenerationMethods: ['embedContent'] }] }));
+  assert.deepStrictEqual(list, ['gemini-x']);
+});
+t('AI: fragment logu zawiera błędy z całego pliku i końcówkę, w granicach limitu', () => {
+  const ai = require('../src/main/ai');
+  const log = Array.from({ length: 5000 }, (_, i) => (i === 1200 ? 'java.lang.NullPointerException: boom' : `linia ${i}`)).join('\n');
+  const ex = ai.logExcerpt(log, 14000);
+  assert(ex.includes('NullPointerException') && ex.includes('linia 4999') && ex.length <= 14020);
+  const p = ai.logPrompt({ target: 'Minecraft', log: 'ERROR x', findings: [{ level: 'error', title: 'Brak Fabric API' }], mods: [{ name: 'Sodium', version: '0.5', enabled: true }] });
+  assert(/Brak Fabric API/.test(p) && /Sodium 0\.5/.test(p));
+  assert(/English/.test(ai.system('en')) && /po polsku/.test(ai.system('pl')));
+});
+
 (async () => {
   for (const [n, f] of queue) { try { await f(); passed++; console.log('  ✔ ' + n); } catch (e) { failed++; console.log('  ✖ ' + n + '\n    ' + String(e.stack).split('\n').slice(0, 4).join('\n    ')); } }
   fs.rmSync(root, { recursive: true, force: true });

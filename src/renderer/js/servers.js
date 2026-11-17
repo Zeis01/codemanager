@@ -215,8 +215,9 @@ App.views = App.views || {};
         ${s.type === 'minecraft' && ['fabric', 'quilt', 'forge', 'neoforge'].includes(s.variant) ? `<button class="btn" data-mrpack>${icon('archive')}.mrpack</button>` : ''}
         <button class="btn" data-add>${icon('plus')}Dodaj pliki</button>
         <button class="btn" data-open>${icon('folder')}Otwórz folder</button>
+        <button class="btn" data-aimods>${icon('bulb')}Zapytaj AI</button>
         <button class="btn primary" data-re>${icon('refresh')}Sprawdź ponownie</button>
-      </div>
+      </div><div data-aislot></div>
       <div class="grid" style="grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start">
         <div class="table-wrap" style="max-height:calc(100vh - 380px)"><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Stan</th></tr></thead><tbody></tbody></table></div>
         <div><div data-iss></div><div data-onl></div><div class="panel" style="margin-top:12px"><dl class="meta-list">${Object.entries(rep.meta).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div></div>
@@ -243,6 +244,7 @@ App.views = App.views || {};
       if (r) tabContent(c, s, content);
     };
     $('[data-re]', c).onclick = () => tabContent(c, s, content);
+    $('[data-aimods]', c).onclick = () => App.mt.aiPanel($('[data-aislot]', c), { title: 'Ocena pluginów i modów przez AI', ask: history => window.cm.call('ai:explainMods', { serverId: s.id }, history) });
     $('[data-open]', c).onclick = async () => { await api('fs:mkdir', content.dir); api('shell:open', content.dir); };
     $('[data-add]', c).onclick = async () => { const f = await api('dialog:files', 'Wybierz pliki'); if (f.length) { await api('mods:add', content.dir, f); toast(`Dodano ${f.length} plik(ów)`); tabContent(c, s, content); } };
     const ws = $('[data-ws]', c);

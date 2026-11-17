@@ -2,7 +2,7 @@
 'use strict';
 App.views = App.views || {};
 App.views.settings = {
-  async render(el) {
+  async render(el, params = {}) {
     const { $, $$, icon, esc, api, toast } = App;
     const s = App.state.settings;
     const info = await api('app:info');
@@ -61,6 +61,16 @@ App.views.settings = {
           <h3 style="margin:18px 0 8px">Tryb przenośny</h3>
           <div data-portable><span class="dim">…</span></div>
         </div>
+      </div>
+      <div class="panel" style="margin-top:12px" id="set-ai"><div class="panel-head"><h2>Sztuczna inteligencja (opcjonalnie)</h2><span class="dim" data-aist></span></div>
+        <p class="muted" style="font-size:13px;margin:0 0 12px">Z własnym kluczem API możesz poprosić AI o wyjaśnienie logu w Analizatorze („Wyjaśnij z AI”), o ocenę zestawu modów w zakładce Zgodność („Zapytaj AI”) i o opis pojedynczego moda. AI działa tylko po kliknięciu. Do dostawcy trafia fragment logu i lista modów, a ścieżki z nazwą konta są ukrywane.</p>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">
+          <div class="field"><label>Dostawca</label><select class="input" data-aip></select></div>
+          <div class="field"><label>Model</label><div class="inline-input"><input class="input mono" data-aim list="ai-models" placeholder="domyślny"><button class="btn" data-aimodels title="Pobierz listę modeli">${icon('refresh')}</button></div><datalist id="ai-models"></datalist></div>
+          <div class="field"><label>Klucz API</label><div class="inline-input"><input class="input mono" type="password" data-aik placeholder="wklej klucz"><button class="btn" data-aikurl title="Strona z kluczami">${icon('globe')}</button></div><span class="hint" data-aikh></span></div>
+          <div class="field" data-aibasef><label>Adres serwera (zgodny z OpenAI)</label><input class="input mono" data-aib placeholder="http://localhost:11434/v1"></div>
+        </div>
+        <div class="row"><button class="btn primary" data-aisave>${icon('save')}Zapisz</button><button class="btn" data-aitest>${icon('pulse')}Sprawdź połączenie</button><button class="btn ghost danger" data-aidel>Usuń klucz</button><span class="dim" style="font-size:12.5px" data-aires></span></div>
       </div>`;
     const drawThemes = () => {
       const box = $('[data-themes]', el); box.innerHTML = '';
@@ -160,6 +170,35 @@ App.views.settings = {
       const ds = $('[data-pdis]', pb); if (ds) ds.onclick = async () => { if (!(await App.confirmBox('Wyłączyć tryb przenośny?', 'Dane zostaną skopiowane do AppData, a CodeManager uruchomi się ponownie.', 'Wyłącz'))) return; App.runJob('Tryb przenośny', jobId => window.cm.call('portable:disable', jobId), { doneMsg: 'Uruchamiam ponownie…' }); };
     };
     drawPortable();
+    // ---- AI ----
+    const provs = await api('ai:providers');
+    const aiSel = $('[data-aip]', el);
+    aiSel.innerHTML = '<option value="">— wyłączone —</option>' + provs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    const drawAi = async () => {
+      const st = await api('ai:status'); aiSel.value = st.provider || '';
+      const p = provs.find(x => x.id === aiSel.value);
+      $('[data-aim]', el).value = st.provider === aiSel.value ? (st.model || '') : (p ? p.model : '');
+      $('[data-aim]', el).placeholder = p ? (p.model || 'nazwa modelu') : '';
+      $('[data-aib]', el).value = st.baseUrl || '';
+      $('[data-aibasef]', el).classList.toggle('hidden', !p || !['ollama', 'custom'].includes(p.id));
+      $('[data-aik]', el).value = ''; $('[data-aik]', el).placeholder = p && st.keys[p.id] ? '•••••••• (zapisany – wpisz nowy, aby zmienić)' : p && !p.needsKey ? 'niepotrzebny' : 'wklej klucz';
+      $('[data-aikh]', el).textContent = p ? (p.needsKey ? 'Klucz jest szyfrowany i zapisany tylko na tym komputerze.' : 'Ten dostawca nie wymaga klucza.') : '';
+      $('[data-aikurl]', el).disabled = !(p && p.keyUrl);
+      $('[data-aist]', el).innerHTML = st.ready ? '<span class="chip ok">gotowe</span>' : '<span class="chip">nieaktywne</span>';
+    };
+    aiSel.onchange = () => { const p = provs.find(x => x.id === aiSel.value); $('[data-aim]', el).value = p ? p.model : ''; $('[data-aibasef]', el).classList.toggle('hidden', !p || !['ollama', 'custom'].includes(p.id)); $('[data-aib]', el).value = p && p.id === 'ollama' ? p.base : ''; };
+    const aiSave = async () => {
+      const o = { provider: aiSel.value || null, model: $('[data-aim]', el).value.trim() || undefined, baseUrl: $('[data-aib]', el).value.trim() || undefined, enabled: !!aiSel.value };
+      const k = $('[data-aik]', el).value.trim(); if (k) o.key = k;
+      const ready = await api('ai:configure', o); App.state.settings.ai = o; await drawAi(); return ready;
+    };
+    $('[data-aisave]', el).onclick = async () => { const r = await aiSave(); toast(r ? 'Zapisano – AI gotowe do użycia' : 'Zapisano. Uzupełnij klucz, aby włączyć AI.', r ? 'ok' : 'warn'); };
+    $('[data-aitest]', el).onclick = async e => { const b = e.currentTarget; b.disabled = true; $('[data-aires]', el).textContent = 'Łączenie…'; try { await aiSave(); const r = await window.cm.call('ai:test'); $('[data-aires]', el).textContent = `✔ ${r.model}: „${r.reply.slice(0, 60)}” (${(r.ms / 1000).toFixed(1)} s)`; } catch (err) { $('[data-aires]', el).textContent = '✖ ' + err.message; } finally { b.disabled = false; } };
+    $('[data-aidel]', el).onclick = async () => { await api('ai:configure', { provider: aiSel.value || null, key: '' }); toast('Usunięto klucz'); drawAi(); };
+    $('[data-aikurl]', el).onclick = () => { const p = provs.find(x => x.id === aiSel.value); if (p && p.keyUrl) api('shell:external', p.keyUrl); };
+    $('[data-aimodels]', el).onclick = async () => { try { await aiSave(); const list = await window.cm.call('ai:models'); $('#ai-models').innerHTML = list.map(m => `<option value="${esc(m)}">`).join(''); toast(`Dostępne modele: ${list.length} – wybierz z listy w polu Model`); } catch (err) { toast(err.message, 'warn', 7000); } };
+    await drawAi();
+    if (params.section === 'ai') setTimeout(() => $('#set-ai', el).scrollIntoView({ behavior: 'smooth' }), 100);
     async function save() {
       const patch = {};
       $$('[data-k]', el).forEach(i => { patch[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });

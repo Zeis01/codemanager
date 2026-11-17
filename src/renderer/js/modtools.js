@@ -345,6 +345,56 @@
     });
   };
 
+  // ---------- sztuczna inteligencja ----------
+  // bezpieczny Markdown: najpierw escapowanie, potem kilka znaczników
+  mt.md = text => {
+    const lines = esc(text || '').split(/\r?\n/); const out = []; let list = null; let code = false; let buf = [];
+    const inline = s => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
+    const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+    for (const l of lines) {
+      if (/^```/.test(l)) { if (code) { out.push(`<pre class="ai-code">${buf.join('\n')}</pre>`); buf = []; code = false; } else { close(); code = true; } continue; }
+      if (code) { buf.push(l); continue; }
+      let m;
+      if ((m = l.match(/^#{1,4}\s+(.*)$/))) { close(); out.push(`<h4>${inline(m[1])}</h4>`); }
+      else if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
+      else if ((m = l.match(/^\s*[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
+      else if (!l.trim()) close();
+      else { close(); out.push(`<p>${inline(l)}</p>`); }
+    }
+    if (code) out.push(`<pre class="ai-code">${buf.join('\n')}</pre>`);
+    close();
+    return out.join('');
+  };
+  mt.aiReady = async () => { try { return (await App.apiQuiet('ai:status')).ready; } catch { return false; } };
+  /**
+   * Panel odpowiedzi AI z możliwością dopytania. ask(history) → Promise<string>
+   */
+  mt.aiPanel = async (box, { title, ask }) => {
+    if (!(await mt.aiReady())) {
+      box.innerHTML = `<div class="note">Funkcje AI są opcjonalne i wymagają Twojego klucza API (Anthropic, OpenAI, Gemini, OpenRouter, Mistral) albo lokalnej Ollamy. <a href="#" data-goset>Skonfiguruj w Ustawieniach</a>.</div>`;
+      $('[data-goset]', box).onclick = e => { e.preventDefault(); App.go('settings', { section: 'ai' }); };
+      return;
+    }
+    const history = [];
+    box.innerHTML = `<div class="ai-panel"><div class="ai-head">${icon('bulb')}<b>${esc(title)}</b><span class="grow"></span><span class="dim" data-model></span><button class="btn sm ghost icon" data-x title="Zamknij">${icon('x')}</button></div><div class="ai-body" data-body></div>
+      <div class="ai-ask"><input class="input" placeholder="Dopytaj, np. „a co jeśli to nie pomoże?”" data-q disabled><button class="btn sm" data-send disabled>Wyślij</button></div>
+      <p class="dim" style="font-size:11.5px;margin:6px 0 0">Odpowiedź generuje AI na podstawie logu i listy modów (ścieżki z nazwą konta są ukrywane). Może się mylić – sprawdź przed usuwaniem plików.</p></div>`;
+    const body = $('[data-body]', box); const q = $('[data-q]', box); const send = $('[data-send]', box);
+    App.apiQuiet('ai:status').then(st => { $('[data-model]', box).textContent = st.model || ''; });
+    $('[data-x]', box).onclick = () => { box.innerHTML = ''; };
+    const turn = async () => {
+      const wait = h('<div class="ai-wait"><div class="progress indet"><i></i></div><span class="dim">AI analizuje…</span></div>'); body.appendChild(wait);
+      q.disabled = send.disabled = true;
+      try { const r = await ask(history.slice()); history.push({ role: 'assistant', content: r }); wait.replaceWith(h(`<div class="ai-msg">${mt.md(r) || '<p class="dim">(pusta odpowiedź)</p>'}</div>`)); }
+      catch (e) { wait.replaceWith(h(`<div class="note warn">${esc(e.message)}</div>`)); if (history.length && history[history.length - 1].role === 'user') history.pop(); }
+      finally { q.disabled = send.disabled = false; q.focus(); }
+    };
+    const follow = () => { const v = q.value.trim(); if (!v) return; q.value = ''; history.push({ role: 'user', content: v }); body.appendChild(h(`<div class="ai-user">${esc(v)}</div>`)); turn(); };
+    send.onclick = follow; q.onkeydown = e => { if (e.key === 'Enter') follow(); };
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    turn();
+  };
+
   // ---------- pasek narzędzi w zakładce Mody ----------
   mt.toolsRow = (ctx, rep, refresh) => {
     const el = h(`<div class="toolsrow"><span class="dim">${icon('wrench')}Narzędzia</span>
