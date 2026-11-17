@@ -16,8 +16,47 @@ const LOADERS = [
   { id: 'forge', name: 'Forge', games: ['minecraft'], desc: 'Klasyczny loader modów Minecraft (files.minecraftforge.net).', kind: 'minecraft' },
   { id: 'neoforge', name: 'NeoForge', games: ['minecraft'], desc: 'Następca Forge dla MC 1.20.2+ (maven.neoforged.net).', kind: 'minecraft' },
   { id: 'tmodloader', name: 'tModLoader', games: ['terraria'], desc: 'Darmowy dodatek w Steam – instalowany przez klienta Steam.', kind: 'link', url: 'steam://install/1281930' },
+  { id: 'skse', name: 'SKSE64', games: ['skyrimse'], desc: 'Skyrim Script Extender – wymagany przez większość modów z wtyczkami DLL. Pobierany z skse.silverlock.org (wersja dobierana do gry).', kind: 'folder' },
+  { id: 'f4se', name: 'F4SE', games: ['fallout4'], desc: 'Fallout 4 Script Extender – pobierany z f4se.silverlock.org (wersja dobierana do gry).', kind: 'folder' },
   { id: 'scripthookv', name: 'Script Hook V', games: ['gta5'], desc: 'Licencja zabrania redystrybucji – CodeManager otworzy oficjalną stronę dev-c.com.', kind: 'link', url: 'https://www.dev-c.com/gtav/scripthookv/' },
 ];
+
+// Script Extendery Bethesdy: strona silverlock.org podaje archiwa .7z dla kolejnych wersji gry
+const SE = {
+  skse: { site: 'https://skse.silverlock.org/', re: /beta\/(skse64_\d+_\d+_\d+(?:_gog)?\.7z)/gi, loader: 'skse64_loader.exe', dll: /^skse64_\d+_\d+_\d+\.dll$/i, exe: 'SkyrimSE.exe', legacy: [['1.5.97', 'skse64_2_00_20.7z']] },
+  f4se: { site: 'https://f4se.silverlock.org/', re: /beta\/(f4se_\d+_\d+_\d+\.7z)/gi, loader: 'f4se_loader.exe', dll: /^f4se_\d+_\d+_\d+\.dll$/i, exe: 'Fallout4.exe', legacy: [['1.10.163', 'f4se_0_06_23.7z']] },
+};
+function pickSeArchive(html, se, gameVersion, gog) {
+  const all = [...new Set([...String(html).matchAll(se.re)].map(m => m[1]))];
+  const legacy = gameVersion && se.legacy.find(([v]) => gameVersion.startsWith(v));
+  if (legacy && all.includes(legacy[1])) return legacy[1];
+  return all.find(n => gog ? /_gog\.7z$/i.test(n) : !/_gog\.7z$/i.test(n)) || all[0] || null;
+}
+async function installScriptExtender(id, root, log, progress, userData) {
+  const se = SE[id];
+  if (!root || !U.exists(path.join(root, se.exe))) throw new Error('W folderze gry nie ma ' + se.exe);
+  const gv = (require('./parsers/binary').peVersion(path.join(root, se.exe)) || {}).file || null;
+  const gog = U.exists(path.join(root, 'Galaxy64.dll')) || U.listFiles(root).some(f => /^goggame-/i.test(path.basename(f)));
+  log(`Wersja gry: ${gv || 'nieznana'}${gog ? ' (GOG)' : ''}`);
+  const html = await N.getText(se.site);
+  const name = pickSeArchive(html, se, gv, gog);
+  if (!name) throw new Error('Nie znaleziono archiwum na ' + se.site + ' – pobierz je ręcznie.');
+  log(`Pobieranie ${name}…`);
+  const arch = await N.download(se.site + 'beta/' + name, N.tempFile(name), progress);
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cm-se-'));
+  try {
+    await N.extract7z(arch, tmp, log);
+    const top = U.walk(tmp, { maxDepth: 3 }).find(r => path.basename(r).toLowerCase() === se.loader);
+    if (!top) throw new Error('Archiwum ma nieoczekiwaną zawartość.');
+    const src = path.join(tmp, path.dirname(top));
+    const bdir = backupDir(userData, id);
+    let n = 0;
+    for (const f of U.listFiles(src).filter(f => /\.(exe|dll)$/i.test(f))) { const dst = path.join(root, path.basename(f)); if (U.exists(dst)) { fs.mkdirSync(bdir, { recursive: true }); fs.copyFileSync(dst, path.join(bdir, path.basename(f))); } fs.copyFileSync(f, dst); n++; }
+    if (U.isDir(path.join(src, 'Data'))) U.copyRecursive(path.join(src, 'Data'), path.join(root, 'Data'), { backupDir: bdir, rootForBackup: root });
+    log(`✔ Skopiowano ${n} plików do folderu gry. Uruchamiaj grę przez ${se.loader} (CodeManager robi to sam przy „Uruchom”).`);
+    return { ok: true, version: name.replace(/\.7z$/, '') };
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); fs.rmSync(arch, { force: true }); }
+}
 
 function backupDir(userData, tag) { return path.join(userData, 'backups', tag + '-' + new Date().toISOString().replace(/[:.]/g, '-')); }
 
@@ -28,6 +67,7 @@ function status(id, root) {
   if (id === 'redloader') return { installed: U.isDir(path.join(root, '_RedLoader')) };
   if (id === 'tmodloader') return { installed: U.exists(path.join(root, 'tModLoader.dll')) };
   if (id === 'scripthookv') return { installed: U.exists(path.join(root, 'ScriptHookV.dll')) };
+  if (id === 'skse' || id === 'f4se') { const se = SE[id]; const dll = U.listFiles(root).map(f => path.basename(f)).find(f => se.dll.test(f)); return { installed: U.exists(path.join(root, se.loader)), version: dll ? dll.match(/_(\d+_\d+_\d+)\.dll$/i)[1].replace(/_/g, '.') : null }; }
   return { installed: null };
 }
 
@@ -82,6 +122,7 @@ async function fabricLatest() {
  */
 async function install(id, opts, log, progress) {
   const { root } = opts;
+  if (id === 'skse' || id === 'f4se') return installScriptExtender(id, root, log, progress, opts.userData);
   if (id === 'bepinex5' || id === 'melonloader' || id === 'redloader') {
     if (!root || !U.isDir(root)) throw new Error('Nieprawidłowy folder gry');
     let rel;
@@ -143,4 +184,4 @@ async function install(id, opts, log, progress) {
   throw new Error('Nieznany instalator: ' + id);
 }
 
-module.exports = { LOADERS, install, status, forgeVersion, neoforgeVersion, fabricLatest, latestMaven, runJava, runFlags };
+module.exports = { pickSeArchive, SE, LOADERS, install, status, forgeVersion, neoforgeVersion, fabricLatest, latestMaven, runJava, runFlags };

@@ -15,7 +15,7 @@ window.EditorLangs = (function () {
       sp: 'sourcepawn', inc: 'sourcepawn', c: 'enforce', sqf: 'sqf', cpp: 'cpp', hpp: 'cpp', h: 'cpp', ext: 'cpp', ini: 'ini', properties: 'ini', conf: 'xml',
       cfg: 'srccfg', gi: 'keyvalues', vdf: 'keyvalues', acf: 'keyvalues', res: 'keyvalues', vmt: 'keyvalues', sii: 'sii', sui: 'sii', mod: 'paradox',
       mcfunction: 'mcfunction', md: 'markdown', js: 'javascript', mjs: 'javascript', ts: 'typescript', bat: 'bat', cmd: 'bat', sh: 'shell', ps1: 'powershell',
-      html: 'html', htm: 'html', css: 'css', py: 'python', java: 'java', kt: 'kotlin', sql: 'sql', log: 'log', txt: 'plaintext',
+      html: 'html', htm: 'html', css: 'css', py: 'python', java: 'java', kt: 'kotlin', sql: 'sql', log: 'log', txt: 'plaintext', ltx: 'ltx', script: 'lua',
     };
     if (ext === 'conf' && /mtaserver|acl/.test(base)) return 'xml';
     if (ext === 'conf') return 'ini';
@@ -80,6 +80,36 @@ window.EditorLangs = (function () {
     reg('mcfunction', {
       tokenizer: { root: [[/^\s*#.*$/, 'comment'], [/^\s*\w+/, 'keyword'], [/@[aeprs](\[[^\]]*\])?/, 'type'], [/"([^"\\]|\\.)*"/, 'string'], [/~-?\d*|\^-?\d*/, 'number'], [/-?\d+(\.\d+)?[bsldf]?/, 'number'], [/minecraft:[\w/.]+/, 'constant'], [/[{}[\]]/, 'delimiter']] },
     });
+
+    // STALKER (X-Ray): sekcje z dziedziczeniem [nazwa]:rodzic, #include, komentarze ;
+    reg('ltx', {
+      tokenizer: {
+        root: [
+          [/^\s*;.*$/, 'comment'], [/;.*$/, 'comment'],
+          [/^\s*#include\b/, 'keyword', '@include'],
+          [/^(\s*)(\[)([^\]]+)(\])(\s*:?\s*)([^;]*)/, ['', 'delimiter.bracket', 'type.identifier', 'delimiter.bracket', 'delimiter', 'tag']],
+          [/^(\s*)([^=;\s][^=;]*?)(\s*)(=)/, ['', 'attribute.name', '', 'delimiter']],
+          [/^(\s*)([^=;\s]+)(\s*)$/, ['', 'attribute.name', '']],
+          [/"[^"]*"/, 'string'], [/\b(true|false|on|off|yes|no|nil)\b/, 'keyword'],
+          [/(?<![\w.])-?\d+(\.\d+)?(e[+-]?\d+)?\b/i, 'number'], [/[,]/, 'delimiter'], [/[$][\w$]+[$]/, 'variable'],
+        ],
+        include: [[/\s+/, ''], [/"[^"]*"/, 'string', '@pop'], [/$/, '', '@pop']],
+      },
+    }, { comments: { lineComment: ';' }, brackets: [['[', ']']], autoClosingPairs: [{ open: '[', close: ']' }, { open: '"', close: '"' }] });
+    monaco.languages.registerFoldingRangeProvider('ltx', { provideFoldingRanges: model => { const out = []; let start = null; const n = model.getLineCount(); for (let i = 1; i <= n; i++) { if (/^\s*\[/.test(model.getLineContent(i))) { if (start && i - 1 > start) out.push({ start, end: i - 1 }); start = i; } } if (start && n > start) out.push({ start, end: n }); return out; } });
+    monaco.languages.registerDocumentSymbolProvider('ltx', { provideDocumentSymbols: model => { const out = []; for (let i = 1; i <= model.getLineCount(); i++) { const m = model.getLineContent(i).match(/^\s*\[([^\]]+)\]/); if (m) out.push({ name: m[1], kind: monaco.languages.SymbolKind.Class, range: new monaco.Range(i, 1, i, 1), selectionRange: new monaco.Range(i, 1, i, 1), detail: '', tags: [], children: [] }); } return out; } });
+
+    // ---- schematy JSON dla znanych plików modów i serwerów (podpowiedzi i walidacja) ----
+    const str = d => ({ type: 'string', description: d }); const arr = d => ({ type: 'array', items: { type: 'string' }, description: d });
+    const deps = d => ({ type: 'object', additionalProperties: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] }, description: d });
+    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: true, allowComments: true, trailingCommas: 'ignore', enableSchemaRequest: false, schemas: [
+      { uri: 'cm://schemas/fabric.mod.json', fileMatch: ['*fabric.mod.json'], schema: { type: 'object', required: ['schemaVersion', 'id', 'version'], properties: { schemaVersion: { type: 'integer', enum: [1], description: 'Zawsze 1' }, id: { type: 'string', pattern: '^[a-z][a-z0-9_-]{1,63}$', description: 'Identyfikator moda (małe litery, cyfry, - i _)' }, version: str('Wersja moda'), name: str('Nazwa wyświetlana'), description: str('Opis'), authors: { type: 'array' }, environment: { enum: ['*', 'client', 'server'], description: 'Gdzie mod działa: * = wszędzie' }, entrypoints: { type: 'object' }, mixins: { type: 'array' }, depends: deps('Wymagane mody: id → zakres wersji'), recommends: deps('Zalecane mody'), suggests: deps('Sugerowane mody'), breaks: deps('Mody niezgodne (gra się nie uruchomi)'), conflicts: deps('Mody kolidujące (ostrzeżenie)'), license: { anyOf: [{ type: 'string' }, { type: 'array' }] }, icon: str('Ścieżka do ikony') } } },
+      { uri: 'cm://schemas/thunderstore-manifest.json', fileMatch: ['*BepInEx/plugins/*/manifest.json', '*thunderstore*/manifest.json'], schema: { type: 'object', required: ['name', 'version_number', 'website_url', 'description', 'dependencies'], properties: { name: { type: 'string', pattern: '^[a-zA-Z0-9_]+$', description: 'Nazwa paczki (bez spacji)' }, version_number: { type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$', description: 'Wersja w formacie X.Y.Z' }, website_url: str('Strona projektu'), description: { type: 'string', maxLength: 250, description: 'Krótki opis (do 250 znaków)' }, dependencies: { type: 'array', items: { type: 'string', pattern: '^[^-]+-[^-]+-\\d+\\.\\d+\\.\\d+$' }, description: 'Zależności: Autor-Nazwa-1.2.3' } } } },
+      { uri: 'cm://schemas/factorio-info.json', fileMatch: ['*factorio*/mods/*/info.json', '*Factorio*/mods/*/info.json'], schema: { type: 'object', required: ['name', 'version', 'title', 'author'], properties: { name: str('Nazwa wewnętrzna'), version: { type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$' }, title: str('Nazwa wyświetlana'), author: str('Autor'), factorio_version: str('Wersja gry, np. 2.0'), dependencies: arr('Zależności, np. "base >= 2.0", "? opcjonalny", "! niezgodny"') } } },
+      { uri: 'cm://schemas/smapi-manifest.json', fileMatch: ['*Stardew Valley/Mods/*/manifest.json'], schema: { type: 'object', required: ['Name', 'Author', 'Version', 'UniqueID'], properties: { Name: str('Nazwa'), Author: str('Autor'), Version: str('Wersja'), UniqueID: str('Unikalny identyfikator'), EntryDll: str('Plik DLL moda'), MinimumApiVersion: str('Minimalna wersja SMAPI'), UpdateKeys: arr('Np. Nexus:1234'), Dependencies: { type: 'array' }, ContentPackFor: { type: 'object' } } } },
+      { uri: 'cm://schemas/enshrouded.json', fileMatch: ['*enshrouded_server.json'], schema: { type: 'object', properties: { name: str('Nazwa serwera'), saveDirectory: str('Folder zapisów'), logDirectory: str('Folder logów'), ip: str('Adres nasłuchu'), queryPort: { type: 'integer', minimum: 1, maximum: 65535 }, slotCount: { type: 'integer', minimum: 1, maximum: 16, description: 'Maks. graczy' } } } },
+      { uri: 'cm://schemas/pack.mcmeta', fileMatch: ['*pack.mcmeta'], schema: { type: 'object', required: ['pack'], properties: { pack: { type: 'object', required: ['pack_format', 'description'], properties: { pack_format: { type: 'integer', description: 'Format paczki – zależy od wersji Minecrafta' }, description: {} } } } } },
+    ] });
 
     reg('log', {
       tokenizer: { root: [[/\b(ERROR|FATAL|SEVERE|Exception|Error|Failed|failed)\b.*$/, 'log.error'], [/\b(WARN|WARNING|Warning)\b.*$/, 'log.warn'], [/\b(INFO|Info)\b/, 'log.info'], [/^\[?\d{1,4}[-:/.]\d{1,2}[-:/.]\d{1,4}[^\]\s]*\]?|\[\d\d:\d\d:\d\d\]/, 'log.date']] },

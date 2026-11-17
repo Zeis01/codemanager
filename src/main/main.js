@@ -1,6 +1,6 @@
 // CodeManager – proces główny Electron
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, safeStorage, Tray, Notification, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const U = require('./util');
@@ -12,6 +12,12 @@ const N = require('./net');
 const { ServerManager } = require('./servers/manager');
 
 let win = null;
+// Tryb przenośny: jeśli obok programu jest folder CodeManager-data, wszystkie dane trafiają tam zamiast do AppData
+const defaultUserData = app.getPath('userData');
+const exeDir = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
+const PORTABLE_DIR = process.env.CM_PORTABLE_DIR || path.join(exeDir, 'CodeManager-data');
+const portableActive = (app.isPackaged || !!process.env.CM_PORTABLE_DIR) && U.isDir(PORTABLE_DIR);
+if (portableActive) app.setPath('userData', PORTABLE_DIR);
 const userData = app.getPath('userData');
 const configFile = path.join(userData, 'config.json');
 let config = U.readJSON(configFile, null) || { games: {}, settings: {} };
@@ -32,6 +38,12 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.once('ready-to-show', () => win.show());
+  win.on('close', e => {
+    if (!app.isQuitting && config.settings.tray && tray) {
+      e.preventDefault(); win.hide();
+      if (!config.settings.trayHintShown) { config.settings.trayHintShown = true; saveConfig(); systemNotify('CodeManager działa w tle', 'Serwery dalej działają. Program otworzysz ikoną w zasobniku systemowym.'); }
+    }
+  });
   win.on('maximize', () => emit('win:state', { maximized: true }));
   win.on('unmaximize', () => emit('win:state', { maximized: false }));
 }
@@ -42,7 +54,8 @@ if (!gotLock) app.quit();
 app.on('second-instance', (_e, argv) => { const u = argv.find(a => /^nxm:\/\//i.test(a)); if (u) handleNxm(u); if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 app.on('open-url', (e, u) => { e.preventDefault(); if (/^nxm:/i.test(u)) handleNxm(u); });
 app.whenReady().then(() => { createWindow(); const u = process.argv.find(a => /^nxm:\/\//i.test(a)); if (u) setTimeout(() => handleNxm(u), 3000); });
-app.on('window-all-closed', () => { servers.stopAll(); rcon.closeAll(); app.quit(); });
+app.on('window-all-closed', () => { if (config.settings.tray && tray && !app.isQuitting) return; servers.stopAll(); rcon.closeAll(); app.quit(); });
+app.on('before-quit', () => { app.isQuitting = true; servers.stopAll(); try { rcon.closeAll(); } catch { /* */ } });
 
 // ---------- bezpieczne opakowanie handlerów ----------
 function handle(ch, fn) {
@@ -117,7 +130,7 @@ handle('mods:add', (targetDir, files) => {
   }
   return done;
 });
-handle('mods:remove', async p => { await shell.trashItem(p); return true; });
+handle('mods:remove', async (p, gameId, label) => { if (config.settings.programTrash === false) { await shell.trashItem(p); return { system: true }; } return trash.put(p, { gameId: gameId || null, label }); });
 
 // Instalatory
 handle('loaders:list', () => installers.LOADERS);
@@ -207,6 +220,7 @@ handle('shell:external', u => { if (/^(https?|steam):\/\//i.test(u)) return shel
 if (process.env.CM_SCREENSHOT_DIR) {
   app.whenReady().then(() => setTimeout(async () => {
     const out = process.env.CM_SCREENSHOT_DIR; fs.mkdirSync(out, { recursive: true });
+    win.webContents.on('console-message', (_e, level, message, line, source) => { if (level >= 2) console.log(`[renderer] ${message} (${path.basename(source || '')}:${line})`); });
     const steps = JSON.parse(process.env.CM_STEPS || '[]');
     for (const [name, js, wait] of steps) {
       try { await win.webContents.executeJavaScript(js); } catch (e) { console.error(name, e.message); }
@@ -273,13 +287,15 @@ handle('modrinth:search', (q, opts) => modrinth.search(q, opts));
 handle('modrinth:versions', (id, opts) => modrinth.versions(id, opts));
 handle('modrinth:install', async (jobId, target, projectId, versionId) => {
   const ctx = target.serverId ? serverCtx(target.serverId) : profileCtx(target.gameId, target.profileId);
+  if (target.gameId) await autoSnapshot(target.gameId, target.profileId, 'przed instalacją moda');
   const res = await modrinth.install(projectId, { modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log: jobLog(jobId), progress: jobProg(jobId), backupRoot }, { versionId });
   return res;
 });
 
 // ---------- aktualizacja jednym przyciskiem ----------
-handle('updates:run', async (jobId, target) => {
+async function updRun(jobId, target) {
   const log = jobLog(jobId), progress = jobProg(jobId);
+  if (target.gameId && !target.__noSnap) await autoSnapshot(target.gameId, target.profileId, 'przed aktualizacją modów');
   if (target.serverId) {
     const ctx = serverCtx(target.serverId);
     if (ctx.modsDir) return { kind: 'modrinth', ...(await modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, progress, backupRoot })) };
@@ -292,7 +308,8 @@ handle('updates:run', async (jobId, target) => {
   if (g.checker === 'factorio') { const gi = U.readJSON(path.join(ctx.info.path, 'data', 'base', 'info.json'), {}); return { kind: 'list', items: await G2.factorioUpdates(ctx.info.path, gi.version, { download: true, log, progress }) }; }
   if (nexus.DOMAINS[g.id]) return { kind: 'list', items: await nexusUpdates(g.id, ctx, log) };
   throw new Error('Ta gra nie ma serwisu z aktualizacjami modów.');
-});
+}
+handle('updates:run', updRun);
 handle('updates:available', id => { const g = gameDef(id); return { modrinth: g.checker === 'minecraft', thunderstore: g.checker === 'bepinex', factorio: g.checker === 'factorio', nexus: !!nexus.DOMAINS[id] }; });
 
 // ---------- Thunderstore ----------
@@ -320,6 +337,7 @@ handle('nexus:install', async (jobId, gameId, profileId, modId, fileId) => {
   const user = config.settings.nexusUser || {};
   const domain = nexus.DOMAINS[gameId];
   if (!user.premium) return { needsBrowser: true, url: `https://www.nexusmods.com/${domain}/mods/${modId}?tab=files&file_id=${fileId}&nmm=1` };
+  await autoSnapshot(gameId, profileId, 'przed instalacją moda');
   return nexusInstall({ domain, gameId, profileId, modId, fileId }, jobLog(jobId), jobProg(jobId));
 });
 async function nexusInstall({ domain, gameId, profileId, modId, fileId, nxm }, log, progress) {
@@ -332,7 +350,7 @@ async function nexusInstall({ domain, gameId, profileId, modId, fileId, nxm }, l
   const paths = await installArchive(dl.archive, { game: gameDef(g), target: ctx.modsDir, gameRoot: ctx.info.path, log });
   fs.rmSync(dl.archive, { force: true });
   const info = await nexus.modInfo(domain, modId).catch(() => null);
-  nexusReg.add({ gameId: g, domain, modId: +modId, fileId: +fileId, version: (dl.file && dl.file.version) || (info && info.version), name: (info && info.name) || dl.name, paths });
+  nexusReg.add({ gameId: g, domain, modId: +modId, fileId: +fileId, version: (dl.file && dl.file.version) || (info && info.version), name: (info && info.name) || dl.name, paths, files: paths.files || [] });
   log(`✔ Zainstalowano ${(info && info.name) || dl.name} (${paths.length} elementów)`);
   return { name: (info && info.name) || dl.name, paths };
 }
@@ -348,7 +366,7 @@ async function handleNxm(url) {
 async function nexusUpdates(gameId, ctx, log) {
   const domain = nexus.DOMAINS[gameId];
   const out = [];
-  const entries = nexusReg.forGame(gameId).map(e => ({ modId: e.modId, version: e.version, name: e.name, src: 'CodeManager' }));
+  const entries = nexusReg.forGame(gameId).filter(e => !e.local).map(e => ({ modId: e.modId, version: e.version, name: e.name, src: 'CodeManager' }));
   if (gameId === 'stardew') {
     for (const x of G2.readManifests(path.join(ctx.info.path, 'Mods'))) {
       const k = ((x.man || {}).UpdateKeys || []).map(u => String(u).match(/^Nexus:(\d+)/i)).find(Boolean);
@@ -369,7 +387,13 @@ async function nexusUpdates(gameId, ctx, log) {
 handle('nexus:updates', gameId => nexusUpdates(gameId, profileCtx(gameId)));
 handle('nexus:installLocal', async (gameId, profileId, files) => {
   const ctx = profileCtx(gameId, profileId); const out = [];
-  for (const f of files) out.push(...await installArchive(f, { game: gameDef(gameId), target: ctx.modsDir, gameRoot: ctx.info.path }));
+  await autoSnapshot(gameId, profileId, 'przed instalacją moda');
+  for (const f of files) {
+    const paths = await installArchive(f, { game: gameDef(gameId), target: ctx.modsDir, gameRoot: ctx.info.path });
+    out.push(...paths);
+    // lokalne archiwa też trafiają do rejestru – potrzebne do wykrywania konfliktów plików
+    nexusReg.add({ gameId, modId: 'local:' + path.basename(f).toLowerCase(), local: true, name: path.basename(f).replace(/\.(zip|7z|rar)$/i, ''), paths, files: paths.files || [] });
+  }
   return out;
 });
 
@@ -406,6 +430,7 @@ handle('import:r2', async (jobId, target, source) => {
 function nexusRegFor(id) { try { return nexusReg.forGame(id); } catch { return []; } }
 handle('fix:run', async (jobId, action, target) => {
   const log = jobLog(jobId), progress = jobProg(jobId);
+  if (target && target.gameId && action.type !== 'open') await autoSnapshot(target.gameId, target.profileId, 'przed naprawą');
   switch (action.type) {
     case 'modrinth-dep': {
       const ctx = target.serverId ? serverCtx(target.serverId) : profileCtx(target.gameId, target.profileId);
@@ -487,7 +512,8 @@ handle('profiles:create', (gameId, scope, name, mods) => profiles.create(gameId,
 handle('profiles:update', (gameId, scope, id, mods) => profiles.update(gameId, scope, id, mods));
 handle('profiles:rename', (gameId, scope, id, name) => profiles.rename(gameId, scope, id, name));
 handle('profiles:remove', (gameId, scope, id) => profiles.remove(gameId, scope, id));
-handle('profiles:apply', (gameId, scope, id, mods) => {
+handle('profiles:apply', async (gameId, scope, id, mods) => {
+  if (!gameId.startsWith('srv:')) await autoSnapshot(gameId, scope === 'game' ? null : scope, 'przed zmianą profilu');
   const plan = profiles.plan(gameId, scope, id, mods);
   const ctx = { gameId, gamePath: gameId.startsWith('srv:') ? null : (detected && detected.games[gameId] ? detected.games[gameId].path : null) };
   let n = 0; const errors = [];
@@ -562,4 +588,497 @@ handle('icons:all', async () => {
   const servers = {};
   for (const t of Object.keys(STYPES)) { try { servers[t] = await icons.forServerType(t, games, { online }); } catch { servers[t] = {}; } }
   return { games, servers };
+});
+
+// =====================================================================
+// Wersja 1.5: konflikty, kolejność, migawki, udostępnianie, kosz, notatki,
+// bisekcja, synchronizacja, monitor, powiadomienia, porty, szablony, gry
+// =====================================================================
+const conflicts = require('./mods/conflicts');
+const loadorder = require('./mods/loadorder');
+const { Snapshots } = require('./mods/snapshots');
+const share = require('./mods/share');
+const dupes = require('./mods/dupes');
+const { Notes, Trash } = require('./mods/store');
+const bisect = require('./mods/bisect');
+const sync = require('./servers/sync');
+const { Monitor, ACTIONS: PLAYER_ACTIONS, ACTION_LABELS, isChat } = require('./servers/monitor');
+const configform = require('./servers/configform');
+const { Notifier } = require('./notify');
+const ports = require('./servers/ports');
+const templates = require('./servers/templates');
+const launch = require('./games/launch');
+const saves = require('./games/saves');
+const reportTxt = require('./report');
+
+const snapshots = new Snapshots(path.join(userData, 'snapshots'));
+const saveBackups = new Snapshots(path.join(userData, 'backups', 'saves'));
+const notes = new Notes(path.join(userData, 'mod-notes.json'));
+const trash = new Trash(path.join(userData, 'trash'), 30);
+const bisects = new bisect.BisectStore(path.join(userData, 'bisect.json'));
+const upnp = new ports.Upnp();
+app.whenReady().then(() => { try { trash.purge(); } catch { /* */ } });
+
+// ---------- powiadomienia systemowe i Discord ----------
+function systemNotify(title, body) {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body, icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'), silent: false });
+  n.on('click', () => { if (win) { win.show(); win.focus(); } });
+  n.show();
+}
+const notifier = new Notifier({ getSettings: () => config.settings, system: systemNotify });
+handle('notify:test', url => notifier.test(url));
+handle('notify:testSystem', () => { systemNotify('CodeManager', 'Powiadomienia systemowe działają.'); return true; });
+
+// ---------- monitor serwerów (CPU, RAM, gracze, Chunky) ----------
+const monitor = new Monitor({ mgr: servers, emit });
+monitor.start();
+servers.onLine = (id, line) => {
+  const s = servers.servers.find(x => x.id === id); if (!s) return;
+  for (const e of monitor.onLine(id, s.type, line)) {
+    if (e.kind === 'join' || e.kind === 'leave') notifier.event(e.kind, { ...s, typeName: (STYPES[s.type] || {}).name }, { player: e.name, count: monitor.count(id) });
+  }
+};
+servers.onEvent = (kind, s, data) => {
+  if (kind !== 'start') monitor.reset(s.id);
+  notifier.event(kind, { ...s, typeName: (STYPES[s.type] || {}).name }, data);
+  updateTray();
+};
+scheduler.onBackup = (s, r) => notifier.event(r.error ? 'backup-failed' : 'backup', { ...s, typeName: (STYPES[s.type] || {}).name }, r.error ? { error: r.error } : { size: r.size });
+handle('servers:stats', id => ({ history: monitor.history(id), ...monitor.players(id) }));
+handle('servers:players', id => ({ ...monitor.players(id), actions: Object.keys(PLAYER_ACTIONS[servers.get(id).type] || {}).filter(k => k !== 'list'), labels: ACTION_LABELS, chatSupported: !!require('./servers/monitor').PATTERNS[servers.get(id).type] }));
+handle('servers:playerAction', (id, action, name) => {
+  const s = servers.get(id); const a = (PLAYER_ACTIONS[s.type] || {})[action];
+  if (!a) throw new Error('Ta akcja nie jest dostępna dla tego serwera.');
+  const cmd = typeof a === 'function' ? a(String(name).trim()) : a;
+  if (!String(name || '').trim() && action !== 'list') throw new Error('Podaj nazwę gracza.');
+  servers.command(id, cmd);
+  if (action === 'kick' || action === 'ban') setTimeout(() => { const st = monitor.st(id); if (st.players.delete(String(name).trim())) emit('server:players', { id, players: [...st.players], count: monitor.count(id) }); }, 1500);
+  return cmd;
+});
+handle('servers:refreshPlayers', id => { const s = servers.get(id); const a = (PLAYER_ACTIONS[s.type] || {}).list; if (a && servers.procs.has(id)) servers.command(id, a); return true; });
+handle('servers:isChat', (type, line) => isChat(type, line));
+
+// ---------- Chunky: pre-generowanie mapy ----------
+handle('chunky:status', id => {
+  const s = servers.get(id);
+  const dir = path.join(s.path, ['paper', 'purpur'].includes(s.variant) ? 'plugins' : 'mods');
+  const installed = U.listFiles(dir).some(f => /chunky/i.test(path.basename(f)) && /\.jar$/i.test(f));
+  return { supported: s.type === 'minecraft' && s.variant !== 'vanilla', installed, running: servers.procs.has(id), progress: monitor.players(id).chunky };
+});
+handle('chunky:install', async (jobId, id) => {
+  const s = servers.get(id); const ctx = serverCtx(id);
+  return modrinth.install('chunky', { modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log: jobLog(jobId), progress: jobProg(jobId), backupRoot });
+});
+handle('chunky:start', (id, { world, radius, shape, center }) => {
+  const r = Math.round(+radius); if (!(r >= 100 && r <= 100000)) throw new Error('Promień musi być od 100 do 100 000 bloków.');
+  const w = String(world || 'world').replace(/[^\w:.-]/g, '');
+  const cmds = [`chunky world ${w}`, `chunky shape ${shape === 'circle' ? 'circle' : 'square'}`, `chunky center ${center && center.trim() ? center.trim().replace(/[^\d\s-]/g, '') : '0 0'}`, `chunky radius ${r}`, 'chunky start', 'chunky confirm'];
+  for (const c of cmds) servers.command(id, c);
+  return true;
+});
+handle('chunky:control', (id, action) => { if (!['pause', 'continue', 'cancel'].includes(action)) throw new Error('Nieznana akcja'); servers.command(id, `chunky ${action}`); if (action === 'cancel') setTimeout(() => servers.command(id, 'chunky confirm'), 300); return true; });
+
+// ---------- formularz konfiguracji ----------
+handle('servers:configForm', id => configform.read(servers.get(id)));
+handle('servers:configFormSave', (id, values) => configform.write(servers.get(id), values));
+
+// ---------- porty ----------
+handle('ports:list', id => ({ ports: portsFor(id), local: ports.localIps() }));
+function portsFor(id) { return ports.portsFor(servers.get(id)); }
+handle('ports:check', async id => {
+  const list = portsFor(id); const out = [];
+  for (const p of list) {
+    if (p.proto !== 'TCP') { out.push({ ...p, result: 'unknown' }); continue; }
+    try { const r = await ports.checkExternal(p.port); out.push({ ...p, result: r.reachable ? 'open' : 'closed', ip: r.ip }); } catch (e) { out.push({ ...p, result: 'error', error: e.message }); }
+  }
+  return { results: out, running: servers.procs.has(id) };
+});
+handle('ports:upnpInfo', async () => { const g = await upnp.discover(); let ip = null; try { ip = await upnp.externalIp(); } catch { /* */ } let mappings = []; try { mappings = await upnp.list(); } catch { /* */ } return { router: g.name, host: g.host, externalIp: ip, mappings, local: ports.localIpFor(g.host) }; });
+handle('ports:upnpOpen', async id => { const s = servers.get(id); const out = []; for (const p of portsFor(id)) { try { out.push({ ...(await upnp.add({ port: p.port, proto: p.proto, desc: `CodeManager ${s.name}`.slice(0, 60) })), ok: true }); } catch (e) { out.push({ ...p, ok: false, error: e.message }); } } return out; });
+handle('ports:upnpClose', async id => { const out = []; for (const p of portsFor(id)) { try { await upnp.remove(p); out.push({ ...p, ok: true }); } catch (e) { out.push({ ...p, ok: false, error: e.message }); } } return out; });
+
+// ---------- szablony serwerów ----------
+handle('servers:templates', () => templates.TEMPLATES.map(t => ({ ...t, typeName: (STYPES[t.type] || {}).name })));
+handle('servers:createFromTemplate', (tplId, data) => {
+  const t = templates.byId(tplId); if (!t) throw new Error('Nie ma takiego szablonu');
+  return servers.create({ ...data, type: t.type, variant: t.variant || data.variant, ram: data.ram || t.ram, afterInstall: srv => templates.runSteps(t, srv, { servers, modrinth, backupRoot }) });
+});
+
+// ---------- synchronizacja klient–serwer ----------
+function syncCompare(serverId, target) {
+  const s = servers.get(serverId);
+  if (s.type === 'minecraft') {
+    const ctx = profileCtx('minecraft', target.profileId);
+    return { kind: 'minecraft', server: s.name, client: ctx.prof && ctx.prof.name, clientDir: ctx.modsDir, inner: 'mods', ...sync.compareMinecraft(path.join(s.path, 'mods'), ctx.modsDir) };
+  }
+  if (s.type === 'valheim') {
+    const g = GAMES.find(x => x.id === 'valheim'); const det = detected && detected.games.valheim;
+    const root = target.path || (det && det.found ? det.path : null);
+    if (!root) throw new Error('Nie wykryto Valheima na tym komputerze – wskaż folder gry.');
+    return { kind: 'valheim', server: s.name, client: g ? g.name : 'Valheim', clientDir: path.join(root, 'BepInEx', 'plugins'), inner: 'BepInEx/plugins', ...sync.compareThunderstore(s.path, root) };
+  }
+  if (s.type === 'projectzomboid') {
+    const info = detected && detected.games.projectzomboid;
+    const G = require('./compat/games');
+    const zhome = path.join(U.home(), 'Zomboid');
+    const mods = G.pzCollectMods([...G.pzWorkshopDirs((info && info.workshop) || []), { dir: path.join(zhome, 'mods'), source: 'Lokalne' }]);
+    return { kind: 'projectzomboid', server: s.name, client: 'Project Zomboid', clientDir: path.join(zhome, 'mods'), inner: 'mods', ...sync.comparePZ(path.join(s.path, 'Zomboid', 'Server', `${s.settings.servername || 'servertest'}.ini`), mods.map(m => m.id)) };
+  }
+  throw new Error('Synchronizacja jest dostępna dla serwerów Minecraft (mody), Valheim i Project Zomboid.');
+}
+handle('sync:compare', (serverId, target) => syncCompare(serverId, target || {}));
+handle('sync:install', (serverId, target) => {
+  const r = syncCompare(serverId, target || {});
+  if (r.kind === 'projectzomboid') throw new Error('Mody Project Zomboid pobierze Steam przy dołączaniu do serwera.');
+  const items = [...r.missing, ...r.mismatch];
+  if (!items.length) return { installed: [] };
+  return { installed: sync.installInto(items, r.clientDir, path.join(userData, 'backups', 'sync', new Date().toISOString().replace(/[:.]/g, '-'))) };
+});
+handle('sync:pack', async (serverId, target) => {
+  const r = syncCompare(serverId, target || {});
+  const items = r.kind === 'projectzomboid' ? [] : [...r.missing, ...r.mismatch];
+  if (!items.length) throw new Error('Gracz ma już wszystkie mody z serwera.');
+  const out = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), `${U.safeName(r.server)}-mody.zip`), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+  if (out.canceled) return null;
+  return sync.makePack(items, out.filePath, { inner: r.inner });
+});
+
+// ---------- konflikty, kolejność ładowania, duplikaty ----------
+function localRegistry(gameId) { return nexusReg.forGame(gameId); }
+handle('mods:conflicts', (gameId, profileId) => {
+  const ctx = profileCtx(gameId, profileId);
+  const rep = compat.check(gameId, ctx.info, ctx.prof, { ...((config.games[gameId] || {}).settings || {}), __nexus: nexusRegFor(gameId) });
+  return conflicts.forGame(gameDef(gameId), rep.mods, localRegistry(gameId));
+});
+handle('loadorder:get', gameId => { const g = gameDef(gameId); if (!loadorder.supported(g)) return null; return loadorder.get(g, infoFor(gameId)); });
+handle('loadorder:sort', (gameId, items) => loadorder.autoSort(gameDef(gameId), items));
+handle('loadorder:check', (gameId, items) => loadorder.problems(gameDef(gameId), items));
+handle('loadorder:save', async (gameId, items) => { const g = gameDef(gameId); await autoSnapshot(gameId, null, 'przed zmianą kolejności'); return loadorder.save(g, items); });
+handle('mods:dupes', (gameId, profileId) => { const rep = gameReport(gameId, profileId); return dupes.find(rep.mods); });
+function gameReport(gameId, profileId) { const ctx = profileCtx(gameId, profileId); return compat.check(gameId, ctx.info, ctx.prof, { ...((config.games[gameId] || {}).settings || {}), __nexus: nexusRegFor(gameId) }); }
+
+// ---------- migawki ----------
+const snapKeep = () => Math.max(2, +config.settings.snapshotKeep || 10);
+function snapCtx(gameId, profileId) { const ctx = profileCtx(gameId, profileId); const g = gameDef(gameId); const extra = []; if (g.checker === 'bethesda') extra.push(require('./compat/games2').pluginsTxt(gameId)); if (g.checker === 'rimworld') extra.push(require('./compat/games2').rimConfigPath()); if (g.checker === 'witcher3') extra.push(path.join(U.documents(), 'The Witcher 3', 'mods.settings')); return { root: ctx.root || ctx.info.path, modsDir: ctx.modsDir, extra }; }
+async function autoSnapshot(gameId, profileId, reason) {
+  if (config.settings.autoSnapshot === false || !gameId) return null;
+  try { return await snapshots.create(gameDef(gameId), snapCtx(gameId, profileId), { reason, keep: snapKeep(), maxBytes: (+config.settings.autoSnapshotMaxGB || 1) * 1024 ** 3 }); } catch (e) { console.error('migawka', e.message); return null; }
+}
+handle('snapshots:list', gameId => snapshots.list(gameId));
+handle('snapshots:create', (gameId, profileId, label) => snapshots.create(gameDef(gameId), snapCtx(gameId, profileId), { label, reason: 'ręczna', keep: snapKeep() }));
+handle('snapshots:restore', (gameId, profileId, id) => snapshots.restore(gameDef(gameId), snapCtx(gameId, profileId), id, { keep: snapKeep() }));
+handle('snapshots:delete', (gameId, id) => { snapshots.remove(snapshots.find(gameId, id)); return true; });
+
+// ---------- udostępnianie profili ----------
+function shareExtra(gameId, ctx) {
+  const g = gameDef(gameId); const extra = { mcVersion: ctx.mcVersion, loader: ctx.loader, nexus: nexusReg.forGame(gameId) };
+  if (g.checker === 'bepinex') { extra.thunder = new Map(); for (const p of thunder.installedPackages(ctx.root).values()) extra.thunder.set(path.resolve(p.dir).toLowerCase(), `${p.full}-${p.version}`); }
+  return extra;
+}
+handle('share:export', (gameId, profileId, name) => {
+  const ctx = profileCtx(gameId, profileId); const rep = gameReport(gameId, profileId);
+  const prof = share.build(gameDef(gameId), name || (ctx.prof && ctx.prof.name) || gameDef(gameId).name, rep.mods, shareExtra(gameId, ctx));
+  return { code: share.encode(prof), profile: prof };
+});
+handle('share:saveFile', async (code, name) => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), `${U.safeName(name || 'profil')}.cmprofile`), filters: [{ name: 'Profil CodeManager', extensions: ['cmprofile'] }] }); if (r.canceled) return null; fs.writeFileSync(r.filePath, code); return r.filePath; });
+handle('share:readFile', f => U.readText(f, '').trim());
+handle('share:preview', (gameId, profileId, input) => {
+  const prof = share.decode(input);
+  if (prof.game !== gameId) throw new Error(`Ten profil jest dla gry „${(gameDef(prof.game) || {}).name || prof.game}”.`);
+  const p = share.plan(prof, gameReport(gameId, profileId).mods);
+  return { name: prof.name, mc: prof.mc, total: prof.mods.length, toggle: p.toggle.map(t => ({ name: t.mod.name, want: t.want })), download: p.download.map(d => ({ name: d.n, version: d.v, source: d.h ? 'Modrinth' : d.ts ? 'Thunderstore' : d.nx ? 'Nexus Mods' : null })), extra: p.extra.map(m => m.name), same: p.same.length };
+});
+handle('share:import', async (jobId, gameId, profileId, input, { disableExtra } = {}) => {
+  const log = jobLog(jobId), progress = jobProg(jobId);
+  const prof = share.decode(input); const g = gameDef(gameId); const ctx = profileCtx(gameId, profileId);
+  await autoSnapshot(gameId, profileId, 'przed importem profilu');
+  const p = share.plan(prof, gameReport(gameId, profileId).mods);
+  const tctx = { gameId, gamePath: ctx.info.path };
+  let toggled = 0;
+  for (const t of p.toggle) { try { compat.toggle(t.mod, tctx); toggled++; log(`${t.want ? 'Włączono' : 'Wyłączono'} ${t.mod.name}`); } catch (e) { log('⚠ ' + t.mod.name + ': ' + e.message); } }
+  if (disableExtra) for (const m of p.extra) { try { compat.toggle(m, tctx); toggled++; log('Wyłączono ' + m.name + ' (nie ma go w profilu)'); } catch (e) { log('⚠ ' + e.message); } }
+  const installed = []; const manual = [];
+  for (const d of p.download) {
+    try {
+      if (d.h && g.checker === 'minecraft') {
+        const v = await fetch(`https://api.modrinth.com/v2/version_file/${d.h}?algorithm=sha1`, { headers: { 'User-Agent': 'CodeManager' } }).then(r => (r.ok ? r.json() : null));
+        if (v) { await modrinth.install(v.project_id, { modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, progress, backupRoot }, { versionId: v.id }); installed.push(d.n); continue; }
+      }
+      if (d.ts && g.checker === 'bepinex') { await thunder.install(d.ts, { root: ctx.root, log, progress, backupRoot }); installed.push(d.n); continue; }
+      if (d.nx && nexus.DOMAINS[gameId] && (config.settings.nexusUser || {}).premium) {
+        const files = await nexus.files(nexus.DOMAINS[gameId], d.nx); const f = files.filter(x => x.category_name === 'MAIN').sort((a, b) => b.uploaded_timestamp - a.uploaded_timestamp)[0];
+        if (f) { await nexusInstall({ domain: nexus.DOMAINS[gameId], gameId, profileId, modId: d.nx, fileId: f.file_id }, log, progress); installed.push(d.n); continue; }
+      }
+      manual.push({ name: d.n, version: d.v || null, url: d.nx && nexus.DOMAINS[gameId] ? `https://www.nexusmods.com/${nexus.DOMAINS[gameId]}/mods/${d.nx}` : null });
+      log(`⚠ ${d.n}: trzeba pobrać ręcznie`);
+    } catch (e) { manual.push({ name: d.n, version: d.v || null }); log(`✖ ${d.n}: ${e.message}`); }
+  }
+  return { name: prof.name, toggled, installed, manual };
+});
+
+// ---------- notatki i tagi ----------
+handle('notes:get', gameId => ({ notes: notes.forGame(gameId), tags: notes.allTags(gameId) }));
+handle('notes:set', (gameId, mod, data) => notes.set(gameId, mod, data));
+
+// ---------- kosz ----------
+handle('trash:list', gameId => trash.list(gameId || null));
+handle('trash:restore', id => trash.restore(id));
+handle('trash:delete', id => { trash.remove(id); return true; });
+handle('trash:empty', gameId => { trash.empty(gameId || null); return true; });
+
+// ---------- bisekcja ----------
+const bkey = (g, p) => `${g}:${p || 'game'}`;
+function bisectApply(gameId, profileId, want) {
+  const mods = gameReport(gameId, profileId).mods; const ctx = { gameId, gamePath: infoFor(gameId).path };
+  let n = 0; const errors = [];
+  for (const m of bisect.changes(mods, want)) { try { compat.toggle(m, ctx); n++; } catch (e) { errors.push(`${m.name}: ${e.message}`); } }
+  return { changed: n, errors };
+}
+const bisectView = s => (s ? { ...s, roundsLeft: bisect.roundsLeft(s), on: s.test.on.map(k => s.names[k] || k), off: s.test.off.map(k => s.names[k] || k), suspectsNames: s.suspects.map(k => s.names[k] || k), culpritName: s.culprit ? (s.names[s.culprit] || s.culprit) : null } : null);
+handle('bisect:get', (gameId, profileId) => bisectView(bisects.get(bkey(gameId, profileId))));
+handle('bisect:start', async (gameId, profileId, keepOn) => {
+  await autoSnapshot(gameId, profileId, 'przed szukaniem winowajcy');
+  const s = bisect.start(gameReport(gameId, profileId).mods, { keepOn });
+  bisects.set(bkey(gameId, profileId), s);
+  const r = bisectApply(gameId, profileId, bisect.desired(s));
+  return { ...bisectView(s), applied: r };
+});
+handle('bisect:answer', (gameId, profileId, problem) => {
+  const s = bisect.answer(bisects.get(bkey(gameId, profileId)), !!problem);
+  bisects.set(bkey(gameId, profileId), s);
+  const r = bisectApply(gameId, profileId, bisect.desired(s));
+  return { ...bisectView(s), applied: r };
+});
+handle('bisect:finish', (gameId, profileId, { keepCulpritOff } = {}) => {
+  const s = bisects.get(bkey(gameId, profileId)); if (!s) return null;
+  const want = new Map(s.original.map(m => [m.key, m.enabled]));
+  if (keepCulpritOff && s.culprit) want.set(s.culprit, false);
+  const r = bisectApply(gameId, profileId, want);
+  bisects.set(bkey(gameId, profileId), null);
+  return r;
+});
+
+// ---------- raport do wysłania ----------
+handle('report:build', async ({ target, analysis, file }) => {
+  let rep = null; let t = null; let logTail = null;
+  if (target && target.gameId) {
+    const ctx = profileCtx(target.gameId, target.profileId); const g = gameDef(target.gameId);
+    try { rep = gameReport(target.gameId, target.profileId); } catch { rep = null; }
+    t = { kind: 'game', name: g.name, detail: ctx.prof && ctx.prof.name !== 'Folder gry' ? `${ctx.prof.name}${ctx.mcVersion ? ` (${ctx.mcVersion} ${ctx.loader || ''})` : ''}` : null, path: ctx.root };
+  } else if (target && target.serverId) {
+    const s = servers.get(target.serverId); t = { kind: 'server', name: s.name, detail: `${(STYPES[s.type] || {}).name}${s.variant ? ' ' + s.variant : ''}${s.version ? ' ' + s.version : ''}`, path: s.path };
+    try { rep = servers.check(target.serverId); } catch { rep = null; }
+  }
+  if (file) { try { logTail = String(file).startsWith('console:') ? servers.getLog(file.slice(8)).slice(-80).join('\n') : analyzer.readTail(file, 64 * 1024); } catch { /* */ } }
+  return reportTxt.build({ appVersion: app.getVersion(), electron: process.versions.electron, target: t, report: rep, analysis, file: file && !String(file).startsWith('console:') ? file : null, logTail });
+});
+handle('report:save', async text => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('desktop'), `raport-codemanager-${new Date().toISOString().slice(0, 10)}.md`), filters: [{ name: 'Tekst', extensions: ['md', 'txt'] }] }); if (r.canceled) return null; fs.writeFileSync(r.filePath, text, 'utf8'); return r.filePath; });
+
+// ---------- analizator: logi z linków ----------
+handle('analyzer:url', async (url, ctx = {}) => {
+  const { text, url: raw } = await analyzer.fetchLog(url);
+  let pkgIndex = [];
+  if (ctx.gameId === 'minecraft') pkgIndex = analyzer.buildPackageIndex(profileCtx('minecraft', ctx.profileId).modsDir);
+  const r = analyzer.analyzeText(text, { pkgIndex });
+  const tmp = path.join(userData, 'logs-online'); fs.mkdirSync(tmp, { recursive: true });
+  const file = path.join(tmp, 'log-' + Date.now() + '.txt'); fs.writeFileSync(file, text);
+  for (const f of U.listFiles(tmp).sort().slice(0, -10)) fs.rmSync(f, { force: true });
+  return { ...r, headline: analyzer.headline(r.findings), file, url: raw, size: text.length };
+});
+
+// ---------- uruchamianie gier i czas gry ----------
+const playtime = new launch.PlayTime(path.join(userData, 'playtime.json'), { emit, games: GAMES, getDetected: () => detected });
+app.whenReady().then(() => { if (!process.env.CM_SCREENSHOT_DIR && config.settings.trackPlaytime !== false) playtime.start(); });
+handle('games:launch', async (gameId, profileId) => {
+  const g = gameDef(gameId); const info = infoFor(gameId); const gs = (config.games[gameId] || {}).settings || {};
+  const prof = compat.profiles(gameId, info).find(p => p.id === profileId) || compat.profiles(gameId, info)[0];
+  if (gs.launchProfile && g.id !== 'minecraft') {
+    const scope = profileId || 'game';
+    const list = profiles.list(gameId, scope);
+    if (list.profiles.find(p => p.id === gs.launchProfile) && list.active !== gs.launchProfile) {
+      const plan = profiles.plan(gameId, scope, gs.launchProfile, gameReport(gameId, profileId).mods);
+      for (const m of plan.changes) { try { compat.toggle(m, { gameId, gamePath: info.path }); } catch { /* */ } }
+      profiles.setActive(gameId, scope, gs.launchProfile);
+    }
+  }
+  const p = launch.plan(g, info, { args: gs.launchArgs, method: gs.launchMethod || 'auto', useLoader: gs.useLoader !== false, profile: prof });
+  await launch.run(p, u => shell.openExternal(u));
+  return { label: p.label };
+});
+handle('playtime:all', () => ({ all: playtime.all(), recent: playtime.recent(6) }));
+
+// ---------- zapisy gier ----------
+function saveCtx(gameId, profileId) { const info = infoFor(gameId); const ctx = gameId === 'minecraft' ? profileCtx(gameId, profileId) : null; return { gamePath: info.path, profileRoot: ctx && ctx.root, steamRoots: steamRootsCache, appid: info.appid, userdata: info.userdata }; }
+async function savePaths(gameId, profileId) { if (!steamRootsCache.length) { try { steamRootsCache = (await detect.steamApps(config.settings.steamPath)).roots || []; } catch { /* */ } } return saves.paths(gameDef(gameId), saveCtx(gameId, profileId)); }
+const saveKey = (g, p) => (g === 'minecraft' && p ? `${g}_${p}` : g);
+handle('saves:info', async (gameId, profileId) => ({ paths: await savePaths(gameId, profileId), backups: saveBackups.list(saveKey(gameId, profileId)) }));
+handle('saves:backup', async (gameId, profileId, label) => {
+  const dirs = await savePaths(gameId, profileId); if (!dirs.length) throw new Error('Nie znaleziono folderu zapisów tej gry.');
+  return saveBackups.create({ id: saveKey(gameId, profileId), checker: 'saves' }, {}, { label, reason: 'zapis gry', keep: Math.max(3, +config.settings.saveKeep || 20), targets: { dirs, files: [] } });
+});
+handle('saves:restore', (gameId, profileId, id) => saveBackups.restore({ id: saveKey(gameId, profileId), checker: 'saves' }, {}, id, { keep: Math.max(3, +config.settings.saveKeep || 20) }));
+handle('saves:delete', (gameId, profileId, id) => { saveBackups.remove(saveBackups.find(saveKey(gameId, profileId), id)); return true; });
+
+// ---------- sprawdzanie aktualizacji wszystkich modów naraz ----------
+function updateTargets() {
+  const out = [];
+  if (detected) for (const g of GAMES) {
+    const info = detected.games[g.id]; if (!info || !info.found) continue;
+    const svc = g.checker === 'minecraft' ? 'Modrinth' : g.checker === 'bepinex' ? 'Thunderstore' : g.checker === 'factorio' ? 'Portal Factorio' : nexus.DOMAINS[g.id] && loadNexusKey() ? 'Nexus Mods' : null;
+    if (!svc) continue;
+    for (const p of compat.profiles(g.id, info)) out.push({ key: `g:${g.id}:${p.id}`, gameId: g.id, profileId: p.id, name: g.name + (p.name && p.name !== 'Folder gry' ? ` – ${p.name}` : ''), service: svc });
+  }
+  for (const s of servers.servers) {
+    if ((s.type === 'minecraft' && s.variant !== 'vanilla') || s.type === 'mcproxy') out.push({ key: `s:${s.id}`, serverId: s.id, name: `Serwer: ${s.name}`, service: 'Modrinth' });
+    if (s.type === 'valheim') out.push({ key: `s:${s.id}`, serverId: s.id, name: `Serwer: ${s.name}`, service: 'Thunderstore' });
+  }
+  return out;
+}
+async function checkUpdatesFor(t, log) {
+  if (t.serverId) {
+    const ctx = serverCtx(t.serverId);
+    if (ctx.modsDir) return modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, dryRun: true });
+    return thunder.updateAll({ root: ctx.root, log, dryRun: true });
+  }
+  const g = gameDef(t.gameId); const ctx = profileCtx(t.gameId, t.profileId);
+  if (g.checker === 'minecraft') return modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, dryRun: true });
+  if (g.checker === 'bepinex') return thunder.updateAll({ root: ctx.root, log, dryRun: true });
+  if (g.checker === 'factorio') { const gi = U.readJSON(path.join(ctx.info.path, 'data', 'base', 'info.json'), {}); const items = await G2.factorioUpdates(ctx.info.path, gi.version, { download: false, log }); return { available: items.filter(i => i.level === 'info' && /dostępna|nowsza|→/i.test(i.title)).map(i => ({ name: i.title })), upToDate: 0, unknown: [] }; }
+  const items = await nexusUpdates(t.gameId, ctx, log); return { available: items.filter(i => i.nexus).map(i => ({ name: i.title, url: i.url })), upToDate: 0, unknown: [], manual: true };
+}
+handle('updates:targets', () => updateTargets());
+handle('updates:checkAll', async jobId => {
+  const log = jobLog(jobId); const out = [];
+  const list = updateTargets();
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i]; emit('job:progress', { jobId, pct: Math.round((i / list.length) * 100) });
+    log(`Sprawdzam: ${t.name} (${t.service})…`);
+    try { const r = await checkUpdatesFor(t, log); out.push({ ...t, available: r.available || [], upToDate: r.upToDate || 0, unknown: (r.unknown || []).length, manual: !!r.manual }); }
+    catch (e) { out.push({ ...t, error: e.message, available: [] }); log('✖ ' + e.message); }
+  }
+  emit('job:progress', { jobId, pct: 100 });
+  return out;
+});
+handle('updates:applyAll', async (jobId, keys) => {
+  const log = jobLog(jobId); const progress = jobProg(jobId); const res = [];
+  const list = updateTargets().filter(t => keys.includes(t.key));
+  for (const t of list) {
+    log(`=== ${t.name} ===`);
+    if (t.gameId) await autoSnapshot(t.gameId, t.profileId, 'przed aktualizacją modów');
+    try {
+      const r = t.serverId ? await updRun(jobId, { serverId: t.serverId }) : await updRun(jobId, { gameId: t.gameId, profileId: t.profileId, __noSnap: true });
+      res.push({ key: t.key, name: t.name, updated: (r.updated || []).length, kind: r.kind });
+    } catch (e) { log('✖ ' + e.message); res.push({ key: t.key, name: t.name, error: e.message }); }
+    progress({ pct: Math.round((res.length / list.length) * 100) });
+  }
+  return res;
+});
+
+// ---------- walidacja TOML / YAML w edytorze ----------
+handle('fs:validate', (lang, text) => {
+  if (lang === 'toml') { try { require('@iarna/toml').parse(text); return []; } catch (e) { return [{ line: (e.line || 0) + 1, col: (e.col || 0) + 1, msg: String(e.message).split('\n')[0].replace(/ at row \d+, col \d+, pos \d+:?/, '') }]; } }
+  if (lang === 'yaml') { const YAML = require('yaml'); const out = []; for (const d of YAML.parseAllDocuments(text)) for (const e of [...d.errors, ...d.warnings]) { const lp = e.linePos && e.linePos[0]; out.push({ line: lp ? lp.line : 1, col: lp ? lp.col : 1, msg: String(e.message).split('\n')[0], warn: d.warnings.includes(e) }); } return out; }
+  if (lang === 'json') { try { JSON.parse(text); return []; } catch (e) { return []; } }
+  return [];
+});
+handle('fs:parse', (lang, text) => {
+  if (lang === 'toml') return require('@iarna/toml').parse(text);
+  if (lang === 'yaml') return require('yaml').parse(text);
+  if (lang === 'json') return JSON.parse(text.replace(/^﻿/, ''));
+  if (lang === 'ltx') return parseLtx(text);
+  if (lang === 'ini' || lang === 'properties') return require('./parsers/text').parseIni(text);
+  throw new Error('Podgląd struktury działa dla JSON, TOML, YAML i INI.');
+});
+
+// STALKER .ltx: sekcje z dziedziczeniem [nazwa]:rodzic1, rodzic2, komentarze ; i #include
+function parseLtx(text) {
+  const out = {}; const includes = []; let cur = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const l = raw.replace(/;.*$/, '').trim(); if (!l) continue;
+    let m;
+    if ((m = l.match(/^#include\s+"([^"]+)"/i))) { includes.push(m[1]); continue; }
+    if ((m = l.match(/^\[([^\]]+)\]\s*(?::\s*(.+))?$/))) { cur = out[m[1].trim()] = {}; if (m[2]) cur['(dziedziczy)'] = m[2].split(',').map(x => x.trim()).filter(Boolean); continue; }
+    const i = l.indexOf('='); const k = (i < 0 ? l : l.slice(0, i)).trim(); const v = i < 0 ? '' : l.slice(i + 1).trim();
+    (cur || (out['(bez sekcji)'] = out['(bez sekcji)'] || {}))[k] = v;
+  }
+  return includes.length ? { '#include': includes, ...out } : out;
+}
+
+// ---------- zasobnik systemowy ----------
+let tray = null;
+function trayMenu() {
+  const list = servers.list();
+  const items = [{ label: 'Pokaż CodeManager', click: () => { if (win) { win.show(); win.focus(); } } }, { type: 'separator' }];
+  if (list.length) {
+    items.push({ label: 'Serwery', enabled: false });
+    for (const s of list) {
+      const on = s.status === 'running';
+      items.push({ label: `${on ? '● ' : '○ '}${s.name}`, submenu: [
+        on ? { label: 'Zatrzymaj', click: () => { try { servers.stop(s.id); } catch { /* */ } } } : { label: 'Uruchom', enabled: s.status !== 'installing', click: () => { try { servers.start(s.id); } catch (e) { systemNotify(s.name, e.message); } } },
+        on ? { label: 'Restart', click: () => servers.restart(s.id).catch(() => {}) } : { label: 'Kopia zapasowa', click: () => scheduler.backup(s.id).catch(() => {}) },
+        { label: 'Otwórz w programie', click: () => { if (win) { win.show(); win.focus(); emit('nav:go', { view: 'servers', params: { id: s.id } }); } } },
+      ] });
+    }
+    items.push({ type: 'separator' });
+  }
+  items.push({ label: 'Zakończ CodeManager', click: () => { app.isQuitting = true; app.quit(); } });
+  return Menu.buildFromTemplate(items);
+}
+function updateTray() {
+  if (!tray) return;
+  const n = servers.list().filter(s => s.status === 'running').length;
+  tray.setToolTip(n ? `CodeManager – działa serwerów: ${n}` : 'CodeManager');
+  tray.setContextMenu(trayMenu());
+}
+function setupTray() {
+  if (config.settings.tray && !tray) {
+    const icon = nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'));
+    tray = new Tray(icon.isEmpty() ? nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', 'icon.png')) : icon);
+    tray.on('double-click', () => { if (win) { win.show(); win.focus(); } });
+    tray.on('click', () => { if (win && process.platform === 'win32') { win.show(); win.focus(); } });
+    updateTray();
+  } else if (!config.settings.tray && tray) { tray.destroy(); tray = null; }
+}
+app.whenReady().then(() => { if (!process.env.CM_SCREENSHOT_DIR) setupTray(); });
+handle('tray:apply', () => { setupTray(); return !!tray; });
+
+// ---------- aktualizacje programu → powiadomienie ----------
+let notifiedVersion = null;
+setInterval(() => { try { const st = updater.status(); if (st.state === 'available' && st.latest && st.latest !== notifiedVersion) { notifiedVersion = st.latest; notifier.event('update', null, { version: st.latest }); } } catch { /* */ } }, 60000);
+
+// ---------- tryb przenośny ----------
+const CACHE_DIRS = new Set(['cache', 'code cache', 'gpucache', 'dawncache', 'dawngraphitecache', 'dawnwebgpucache', 'blob_storage', 'crashpad', 'network', 'shared dictionary', 'session storage', 'service worker', 'webstorage', 'logs-online']);
+function copyData(src, dst, onFile) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const e of U.listDir(src)) {
+    if (CACHE_DIRS.has(e.name.toLowerCase()) || /^singleton/i.test(e.name) || e.name === 'lockfile') continue;
+    const a = path.join(src, e.name), b = path.join(dst, e.name);
+    try { if (e.isDirectory()) copyData(a, b, onFile); else { fs.copyFileSync(a, b); onFile && onFile(e.name); } } catch { /* zablokowany plik */ }
+  }
+}
+handle('portable:status', () => {
+  const mode = updater.mode();
+  let writable = false; try { fs.accessSync(exeDir, fs.constants.W_OK); writable = true; } catch { /* */ }
+  return { active: portableActive, dir: PORTABLE_DIR, defaultDir: defaultUserData, mode, available: portableActive || ((mode === 'portable' || mode === 'zip') && writable), writable };
+});
+handle('portable:enable', async jobId => {
+  if (portableActive) return true;
+  const log = jobLog(jobId); let n = 0;
+  log(`Kopiowanie danych z ${userData} do ${PORTABLE_DIR}…`);
+  saveConfig();
+  copyData(userData, PORTABLE_DIR, () => { if (++n % 50 === 0) log(`Skopiowano ${n} plików…`); });
+  log(`✔ Skopiowano ${n} plików. Program uruchomi się ponownie.`);
+  setTimeout(() => { app.relaunch(); app.isQuitting = true; app.exit(0); }, 1500);
+  return true;
+});
+handle('portable:disable', async jobId => {
+  if (!portableActive) return true;
+  const log = jobLog(jobId); let n = 0;
+  saveConfig();
+  copyData(PORTABLE_DIR, defaultUserData, () => n++);
+  const old = PORTABLE_DIR + '-wylaczony-' + Date.now().toString(36);
+  log(`✔ Skopiowano ${n} plików do ${defaultUserData}. Folder obok programu zostanie przemianowany na ${path.basename(old)}.`);
+  setTimeout(() => { try { fs.renameSync(PORTABLE_DIR, old); } catch { /* */ } app.relaunch(); app.isQuitting = true; app.exit(0); }, 1500);
+  return true;
 });

@@ -27,8 +27,10 @@ App.views.dashboard = {
         <div>
           <div class="panel flush"><div class="panel-head"><h2>Serwery</h2><button class="btn sm ghost" data-go="servers">Zarządzaj</button></div>
             <table class="table"><thead><tr><th class="ic-cell"></th><th>Nazwa</th><th>Stan</th><th>Port</th></tr></thead><tbody data-servers></tbody></table></div>
+          <div class="panel flush" style="margin-top:12px" data-recentp><div class="panel-head"><h2>Ostatnio grane</h2></div><div class="recent" data-recent></div></div>
           <div class="panel flush" style="margin-top:12px"><div class="panel-head"><h2>Narzędzia</h2></div>
             <div class="linklist">
+              <button data-go="updates">${icon('update')}<span>Aktualizacje modów<small>Sprawdza naraz wszystkie gry i serwery</small></span></button>
               <button data-go="analyzer">${icon('pulse')}<span>Analizator błędów<small>Wyjaśnia, dlaczego gra lub serwer się wyłącza</small></span></button>
               <button data-go="installers">${icon('download')}<span>Instalatory<small>BepInEx, MelonLoader, RedLoader, Fabric, Forge, NeoForge, Quilt</small></span></button>
               <button data-go="editor">${icon('code')}<span>Edytor plików<small>Konfiguracje i skrypty z podświetlaniem składni</small></span></button>
@@ -47,6 +49,15 @@ App.views.dashboard = {
       const tr = h(`<tr style="cursor:pointer"><td class="ic-cell">${gameBadge(g)}</td><td class="nm">${esc(g.name)} ${App.compatMark(g)}</td><td class="muted">${esc(g.id === 'minecraft' ? `${info.instances.length} inst.` : info.source)}</td><td>${rep ? rep.mods.length : '<span class="dim">–</span>'}</td><td>${stan}</td></tr>`);
       tr.onclick = () => App.go('games', { id: g.id });
       gt.appendChild(tr);
+    }
+    const rc = $('[data-recent]', el); const recent = (st.recent || []).filter(r => det && det.games[r.id] && det.games[r.id].found);
+    if (!recent.length) $('[data-recentp]', el).remove();
+    for (const r of recent) {
+      const g = st.defs.games.find(x => x.id === r.id); if (!g) continue;
+      const row = h(`<div class="recent-row">${gameBadge(g)}<div style="flex:1;min-width:0"><div class="nm">${esc(g.name)}</div><div class="sub">${r.playing ? 'w grze teraz' : App.timeAgo(r.last)} · łącznie ${App.mt.fmtDuration(r.total)}</div></div><button class="btn sm ghost icon" title="Uruchom">${icon('play')}</button></div>`);
+      row.querySelector('button').onclick = e => { e.stopPropagation(); App.mt.launch(g); };
+      row.onclick = () => App.go('games', { id: g.id });
+      rc.appendChild(row);
     }
     const STATUS = { running: 'działa', stopped: 'zatrzymany', installing: 'instalacja…', stopping: 'zatrzymywanie…', error: 'błąd' };
     const sv = $('[data-servers]', el);

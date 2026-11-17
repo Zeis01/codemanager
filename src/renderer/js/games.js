@@ -61,9 +61,11 @@ App.views = App.views || {};
       ${g.compat === 'none' ? '<span class="chip">Instalacja ręczna</span>' : ''}
       <div class="path">${esc(info.path || '')}</div>
       ${info.warning ? `<div class="chip warn" title="${esc(info.warning)}">${icon('alert')}Sprawdź lokalizację</div>` : ''}
+      ${App.mt.playLine(g.id) ? `<div class="playtime">${icon('clock')}${App.mt.playLine(g.id)}</div>` : ''}
       ${rep ? `${healthBar(rep.mods)}<div class="health-legend"><span>${rep.mods.length} modów</span>${rep.counts.error ? `<span class="e">${App.plural(rep.counts.error, 'błąd', 'błędy', 'błędów')}</span>` : ''}${rep.counts.warn ? `<span class="w">${App.plural(rep.counts.warn, 'ostrzeżenie', 'ostrzeżenia', 'ostrzeżeń')}</span>` : ''}${!rep.counts.error && !rep.counts.warn ? '<span class="o">Wszystko gra</span>' : ''}</div>` : ''}
       <div class="actions">
         ${g.compat === 'none' ? `<button class="btn sm primary" data-a="mods">${icon('puzzle')}Mody</button>` : `<button class="btn sm primary" data-a="check">${icon('shield')}${rep ? 'Sprawdź ponownie' : 'Sprawdź zgodność'}</button>`}
+        <button class="btn sm icon" data-a="play" title="Uruchom grę">${icon('play')}</button>
         ${g.id !== 'minecraft' ? `<button class="btn sm icon" data-a="path" title="Zmień lokalizację">${icon('edit')}</button>` : ''}
         <button class="btn sm icon" data-a="open" title="Otwórz folder">${icon('folder')}</button>
       </div></div>`);
@@ -74,6 +76,7 @@ App.views = App.views || {};
       if (a.dataset.a === 'check') App.go('games', { id: g.id, tab: 'compat', run: true });
       if (a.dataset.a === 'mods') App.go('games', { id: g.id, tab: 'mods' });
       if (a.dataset.a === 'path') changePath(g.id);
+      if (a.dataset.a === 'play') App.mt.launch(g);
       if (a.dataset.a === 'open') api('shell:open', info.path);
     };
     c.onkeydown = e => { if (e.key === 'Enter') App.go('games', { id: g.id }); };
@@ -110,15 +113,17 @@ App.views = App.views || {};
     if (g.compat === 'none' && tab === 'compat') tab = 'mods';
     el.innerHTML = `
       <button class="back" data-back>${icon('back')}Znalezione gry</button>
-      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)} ${App.compatMark(g)}</h1><p class="lead" style="margin-top:2px">${esc(g.desc)}</p></div>${App.state.icons && App.state.icons.games[g.id] && App.state.icons.games[g.id].header ? `<img class="cover" src="${esc(App.state.icons.games[g.id].header)}" alt="">` : ''}</div>
+      <div class="detail-hero">${gameBadge(g)}<div style="flex:1;min-width:0"><h1>${esc(g.name)} ${App.compatMark(g)}</h1><p class="lead" style="margin-top:2px">${esc(g.desc)}</p>${App.mt.playLine(g.id) ? `<div class="playtime">${icon('clock')}${App.mt.playLine(g.id)}</div>` : ''}</div><button class="btn primary" data-play>${icon('play')}Uruchom</button>${App.state.icons && App.state.icons.games[g.id] && App.state.icons.games[g.id].header ? `<img class="cover" src="${esc(App.state.icons.games[g.id].header)}" alt="">` : ''}</div>
       ${profiles.length > 1 || g.id === 'minecraft' ? `<div class="profile-bar"><label class="muted" for="prof">${g.id === 'minecraft' ? 'Instancja' : 'Profil'}</label><select class="input" id="prof">${profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.mcVersion ? ` – ${esc(p.mcVersion)} ${esc(p.loader || '')}` : ''}</option>`).join('')}</select><span class="path" data-ppath></span></div>` : ''}
       <div class="tabs" role="tablist">
-        <button data-tab="mods">Mody</button>${g.compat === 'none' ? '' : '<button data-tab="compat">Zgodność</button>'}<button data-tab="get">Pobierz mody</button>
+        <button data-tab="mods">Mody</button>${g.compat === 'none' ? '' : '<button data-tab="compat">Zgodność</button>'}<button data-tab="conflicts">Konflikty</button>${['bethesda', 'rimworld'].includes(g.checker) ? '<button data-tab="order">Kolejność ładowania</button>' : ''}<button data-tab="get">Pobierz mody</button>
         ${(g.loaders && g.loaders.length) ? '<button data-tab="loader">Modloader</button>' : ''}
+        <button data-tab="saves">Zapisy gry</button><button data-tab="snaps">Migawki</button>
         <button data-tab="settings">Ustawienia</button>
       </div>
       <div data-content></div>`;
     $('[data-back]', el).onclick = () => App.go('games');
+    $('[data-play]', el).onclick = () => App.mt.launch(g, profileId);
     const sel = $('#prof', el);
     const updPath = () => { const p = profiles.find(x => x.id === profileId); const pp = $('[data-ppath]', el); if (pp && p) pp.textContent = p.root; };
     if (sel) { sel.value = profileId; sel.onchange = () => { profileId = sel.value; delete App.state.reports[g.id]; updPath(); show(); }; updPath(); }
@@ -132,8 +137,12 @@ App.views = App.views || {};
       if (tab === 'loader') tabLoader(content, ctx);
       if (tab === 'get') tabGet(content, ctx);
       if (tab === 'settings') tabSettings(content, ctx);
+      if (tab === 'conflicts') App.mt.conflictsTab(content, ctx);
+      if (tab === 'order') App.mt.loadOrderTab(content, ctx);
+      if (tab === 'saves') App.mt.savesTab(content, ctx);
+      if (tab === 'snaps') App.mt.snapshotsTab(content, ctx);
     };
-    $$('.tabs button', el).forEach(b => b.onclick = () => { tab = b.dataset.tab; show(); });
+    $$('.tabs button', el).forEach(b => b.onclick = () => { if (App.leaveGuard && !App.leaveGuard()) return; App.leaveGuard = null; tab = b.dataset.tab; show(); });
     show();
   }
 
@@ -149,42 +158,49 @@ App.views = App.views || {};
     let rep = App.state.reports[ctx.g.id];
     try { if (!rep) rep = await runCheck(ctx); } catch { c.innerHTML = ''; return; }
     const target = await api('mods:target', ctx.g.id, ctx.profileId);
-    let filter = '';
+    const notes = await App.mt.loadNotes(ctx.g.id);
+    let filter = ''; let tagFilter = '';
     c.innerHTML = `
       <div class="row" style="margin-bottom:12px">
         <div class="searchbox">${icon('search')}<input class="input" placeholder="Szukaj modu" data-q></div>
-        <span class="dim" style="flex:1">${rep.mods.length} pozycji · ${rep.mods.filter(m => m.enabled).length} włączonych</span>
+        <select class="input" style="width:auto" data-tagf><option value="">Wszystkie tagi</option>${notes.tags.map(t => `<option>${esc(t)}</option>`).join('')}</select>
+        <span class="dim" style="flex:1;white-space:nowrap">${rep.mods.length} pozycji · ${rep.mods.filter(m => m.enabled).length} włączonych</span>
         <button class="btn" data-update>${icon('update')}Aktualizuj wszystko</button>
         <button class="btn" data-add>${icon('plus')}Dodaj mody</button>
         <button class="btn" data-open>${icon('folder')}Folder modów</button>
         ${ctx.g.compat === 'none' ? '' : `<button class="btn primary" data-check>${icon('shield')}Sprawdź zgodność</button>`}
       </div>
       ${ctx.g.compat === 'none' ? `<div class="note" style="margin-bottom:10px">Sprawdzanie zgodności jest wyłączone dla tej gry. Mody możesz instalować${App.state.defs.games.find(x => x.id === ctx.g.id).nexus ? ' z Nexus Mods (zakładka „Pobierz mody”),' : ''} z archiwum lub przeciągając pliki na listę, a także włączać i wyłączać je przełącznikiem.</div>` : ''}
-      <div class="table-wrap" data-drop><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Źródło</th><th>Stan</th><th style="width:90px"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap" data-drop><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Źródło</th><th>Stan</th><th style="width:124px"></th></tr></thead><tbody></tbody></table></div>
       <p class="dim" style="font-size:12.5px;margin-top:8px">Przeciągnij pliki modów na listę, aby je dodać do: <span class="path">${esc(target)}</span>. Mody z Warsztatu Steam włączasz i wyłączasz w grze.</p>`;
     const tbody = $('tbody', c);
-    c.insertBefore(profileBar(ctx, rep, () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }), c.firstChild);
+    const again = () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); };
+    c.insertBefore(App.mt.toolsRow(ctx, rep, again), c.firstChild);
+    c.insertBefore(profileBar(ctx, rep, again), c.firstChild);
+    const deps = ctx.g.compat === 'none' ? null : App.mt.depsBanner(rep, ctx, again); if (deps) c.insertBefore(deps, c.firstChild);
+    App.mt.bisectBanner(c, ctx, again).then(b => { if (b && c.isConnected) c.insertBefore(b, c.firstChild); });
     if (ctx.g.compat === 'none' && !App.state.defs.games.find(x => x.id === ctx.g.id).nexus) $('[data-update]', c).remove();
     else $('[data-update]', c).onclick = () => updateAll(ctx, () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); });
     const draw = () => {
       tbody.innerHTML = '';
-      const list = rep.mods.filter(m => !filter || (m.name + ' ' + (m.id || '') + ' ' + (m.key || '')).toLowerCase().includes(filter));
+      const list = rep.mods.filter(m => (!filter || (m.name + ' ' + (m.id || '') + ' ' + (m.key || '') + ' ' + ((notes.notes[App.mt.noteKey(m)] || {}).note || '')).toLowerCase().includes(filter)) && (!tagFilter || ((notes.notes[App.mt.noteKey(m)] || {}).tags || []).includes(tagFilter)));
       if (!list.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty" style="padding:30px"><h2>${rep.mods.length ? 'Brak wyników' : 'Brak modów'}</h2><p>${rep.mods.length ? 'Zmień wyszukiwaną frazę.' : 'Dodaj mody przyciskiem powyżej lub przeciągnij pliki tutaj.'}</p></div></td></tr>`; return; }
       for (const m of list) {
         const st = ctx.g.compat === 'none' ? (m.enabled ? ['', 'Włączony'] : ['', 'Wyłączony']) : ({ ok: ['ok', 'Zgodny'], warn: ['warn', 'Ostrzeżenie'], error: ['error', 'Błąd'], disabled: ['', 'Wyłączony'] }[m.status] || ['', '-']);
         const tr = h(`<tr class="${m.enabled ? '' : 'off'}">
           <td>${m.toggleable ? `<label class="switch" title="${m.enabled ? 'Wyłącz' : 'Włącz'}"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span></span></label>` : `<label class="switch" title="Zarządzane przez grę lub Steam"><input type="checkbox" ${m.enabled ? 'checked' : ''} disabled><span></span></label>`}</td>
-          <td><div class="nm">${esc(m.name)}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
+          <td><div class="nm">${esc(m.name)} ${App.mt.tagChips(notes.notes[App.mt.noteKey(m)])}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
           <td class="mono">${esc(m.version || '-')}</td>
           <td><span class="sub">${esc(m.loader ? m.loader + ' · ' : '')}${esc(m.source || '')}${m.size ? ' · ' + fmtSize(m.size) : ''}</span></td>
           <td><span class="chip ${st[0]}">${st[1]}</span></td>
-          <td style="text-align:right">${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
+          <td style="text-align:right"><button class="btn sm ghost icon" data-a="note" title="Notatka i tagi">${icon('edit')}</button>${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
         const sw = $('input', tr);
         if (m.toggleable) sw.onchange = async () => { try { await api('mods:toggle', m, ctx.g.id); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); } catch { sw.checked = !sw.checked; } };
         tr.onclick = async e => {
           const a = e.target.closest('[data-a]'); if (!a) return;
           if (a.dataset.a === 'show') api('shell:show', m.file);
-          if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza systemowego.`, 'Przenieś do kosza', true)) { await api('mods:remove', m.file); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
+          if (a.dataset.a === 'note') App.mt.editNote(ctx.g.id, m, notes, draw);
+          if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza ${App.state.settings.programTrash === false ? 'systemowego' : 'CodeManager – przywrócisz go przez 30 dni (Narzędzia → Kosz)'}.`, 'Przenieś do kosza', true)) { await api('mods:remove', m.file, ctx.g.id, m.name); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
         };
         // wiersz klikalny → pokaż problemy moda
         tr.ondblclick = () => {
@@ -196,6 +212,7 @@ App.views = App.views || {};
     };
     draw();
     $('[data-q]', c).oninput = e => { filter = e.target.value.toLowerCase(); draw(); };
+    $('[data-tagf]', c).onchange = e => { tagFilter = e.target.value; draw(); };
     $('[data-open]', c).onclick = async () => { await api('fs:mkdir', target); api('shell:open', target); };
     if ($('[data-check]', c)) $('[data-check]', c).onclick = () => { delete App.state.reports[ctx.g.id]; App.go('games', { id: ctx.g.id, tab: 'compat', profile: ctx.profileId, run: true }); };
     const addFiles = async files => { if (!files.length) return;
@@ -328,9 +345,23 @@ App.views = App.views || {};
       ${info.warning ? `<div class="note warn" style="margin-bottom:14px">${esc(info.warning)}</div>` : ''}
       ${info.workshop && info.workshop.length ? `<div class="field"><label>Warsztat Steam</label>${info.workshop.map(w => `<span class="path">${esc(w)}</span>`).join('<br>')}</div>` : ''}
       <div class="row" style="margin-bottom:22px"><button class="btn" data-reset>${icon('refresh')}Wykryj automatycznie</button><button class="btn" data-open>${icon('folder')}Otwórz folder</button><button class="btn" data-edit>${icon('code')}Otwórz w edytorze</button></div>
+      <h2 style="margin-bottom:12px">Uruchamianie</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">
+        <div class="field"><label>Sposób uruchamiania</label><select class="input" data-l="launchMethod"><option value="auto">Automatycznie</option><option value="steam" ${gs.launchMethod === 'steam' ? 'selected' : ''}>Przez Steam</option><option value="exe" ${gs.launchMethod === 'exe' ? 'selected' : ''}>Bezpośrednio (plik .exe)</option></select></div>
+        <div class="field"><label>Profil modów przed uruchomieniem</label><select class="input" data-l="launchProfile" data-lprof><option value="">— nie zmieniaj —</option></select></div>
+      </div>
+      <div class="field"><label>Parametry uruchamiania</label><input class="input mono" data-l="launchArgs" value="${esc(gs.launchArgs || '')}" placeholder="np. -windowed -skipintro"><span class="hint">Przekazywane do gry (przez Steam lub bezpośrednio do pliku .exe).</span></div>
+      ${['skyrimse', 'fallout4'].includes(g.id) ? `<label class="check" style="margin-bottom:12px"><input type="checkbox" data-l="useLoader" ${gs.useLoader !== false ? 'checked' : ''}><span>Uruchamiaj przez ${g.id === 'skyrimse' ? 'skse64_loader.exe' : 'f4se_loader.exe'}, jeśli jest zainstalowany</span></label>` : ''}
+      <div class="row" style="margin-bottom:22px"><button class="btn primary" data-savel>${icon('save')}Zapisz ustawienia uruchamiania</button><button class="btn" data-playnow>${icon('play')}Uruchom teraz</button></div>
       ${VERSION_HINT[g.id] ? `<h2 style="margin-bottom:12px">Wersja gry</h2><div class="field"><label>Ręczna wersja (opcjonalnie)</label><div class="inline-input"><input class="input" data-ver value="${esc(gs.gameVersion || '')}" placeholder="automatycznie"><button class="btn primary" data-savever>Zapisz</button></div><span class="hint">${esc(VERSION_HINT[g.id])}</span></div>` : ''}
     </div>`);
     $('[data-change]', panel).onclick = () => changePath(g.id);
+    api('profiles:list', g.id, ctx.profileId || 'game').then(d => { const s2 = $('[data-lprof]', panel); s2.innerHTML += d.profiles.map(p => `<option value="${p.id}" ${gs.launchProfile === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join(''); });
+    $('[data-playnow]', panel).onclick = () => App.mt.launch(g, ctx.profileId);
+    $('[data-savel]', panel).onclick = async () => {
+      const patch = {}; $$('[data-l]', panel).forEach(i => { patch[i.dataset.l] = i.type === 'checkbox' ? i.checked : (i.value.trim() || undefined); });
+      const saved = await api('games:settings', g.id, patch); App.state.gameConfig[g.id] = { ...(App.state.gameConfig[g.id] || {}), settings: saved }; toast('Zapisano ustawienia uruchamiania');
+    };
     $('[data-open]', panel).onclick = () => api('shell:open', info.path);
     $('[data-edit]', panel).onclick = () => App.go('editor', { folder: info.path });
     $('[data-reset]', panel).onclick = async () => { App.state.detected.games[g.id] = await api('games:resetPath', g.id); delete App.state.reports[g.id]; toast('Przywrócono automatyczne wykrywanie'); ctx.rerender(); };

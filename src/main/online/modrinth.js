@@ -125,7 +125,7 @@ async function updateAll(ctx) {
   const files = U.listFiles(ctx.modsDir).filter(f => /\.jar$/i.test(f));
   const byHash = {}; for (const f of files) byHash[sha1(f)] = f;
   const keys = Object.keys(byHash);
-  const result = { updated: [], upToDate: 0, unknown: [] };
+  const result = { updated: [], upToDate: 0, unknown: [], available: [] };
   if (!keys.length) return result;
   const body = { hashes: keys, algorithm: 'sha1', loaders: loadersFor(ctx.loader), game_versions: ctx.mcVersion ? [ctx.mcVersion] : undefined };
   const ups = (await req('/version_files/update', { method: 'POST', body: JSON.stringify(body) })) || {};
@@ -137,6 +137,7 @@ async function updateAll(ctx) {
     if (!nv || nv.id === known[h].id) { result.upToDate++; continue; }
     const f = primaryFile(nv);
     const dest = path.join(ctx.modsDir, f.filename);
+    if (ctx.dryRun) { (result.available = result.available || []).push({ name: path.basename(old), from: known[h].version_number, to: nv.version_number, file: f.filename }); continue; }
     ctx.log && ctx.log(`Aktualizacja ${path.basename(old)} → ${f.filename}`);
     try {
       await downloadVerified(f, dest, ctx.progress);

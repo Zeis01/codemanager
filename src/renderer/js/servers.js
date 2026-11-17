@@ -17,8 +17,9 @@ App.views = App.views || {};
   async function renderList(el) {
     await loadTypes(); await refreshList();
     el.innerHTML = `<div class="head"><div class="grow"><h1>Serwery</h1><p class="lead">Instaluj pliki serwerów, uruchamiaj je z konsolą i sprawdzaj zgodność pluginów oraz modów.</p></div>
-      <div class="row"><button class="btn" data-import>${icon('folder')}Importuj istniejący</button><button class="btn primary" data-new>${icon('plus')}Nowy serwer</button></div></div><div data-list></div>`;
+      <div class="row"><button class="btn" data-import>${icon('folder')}Importuj istniejący</button><button class="btn" data-tpl>${icon('template')}Z szablonu</button><button class="btn primary" data-new>${icon('plus')}Nowy serwer</button></div></div><div data-list></div>`;
     $('[data-new]', el).onclick = () => wizard(false);
+    $('[data-tpl]', el).onclick = () => App.st.templatePicker(t => wizard(false, t));
     $('[data-import]', el).onclick = () => wizard(true);
     const list = $('[data-list]', el);
     if (!App.state.servers.length) {
@@ -47,7 +48,7 @@ App.views = App.views || {};
   }
 
   // ===================== KREATOR =====================
-  async function wizard(importMode) {
+  async function wizard(importMode, tpl) {
     await loadTypes();
     let sel = null;
     const body = h(`<div>
@@ -81,8 +82,18 @@ App.views = App.views || {};
       }
     };
     $$('.type-opt', body).forEach(b => b.onclick = () => pick(b.dataset.t));
+    if (tpl) {
+      setTimeout(async () => {
+        await pick(tpl.type);
+        $('.type-grid', body).closest('.field').classList.add('hidden');
+        form.insertBefore(h(`<div class="note" style="margin-bottom:12px"><b>Szablon: ${esc(tpl.name)}</b><br>${esc(tpl.desc)}<br><span class="dim">Po instalacji serwera CodeManager doinstaluje elementy szablonu (postęp w konsoli).</span></div>`), form.firstChild);
+        const vs = $('[data-k="variant"]', form); if (vs && tpl.variant) { vs.value = tpl.variant; vs.disabled = true; }
+        const nm = $('[data-k="name"]', form); if (nm) nm.value = tpl.name.replace(/^Minecraft /, 'Serwer ');
+        const ram = $('[data-k="ram"]', form); if (ram && tpl.ram) ram.value = tpl.ram;
+      }, 0);
+    }
     modal({
-      title: importMode ? 'Importuj istniejący serwer' : 'Nowy serwer', wide: true, body,
+      title: tpl ? 'Nowy serwer z szablonu' : importMode ? 'Importuj istniejący serwer' : 'Nowy serwer', wide: true, body,
       actions: [{ label: 'Anuluj' }, {
         label: importMode ? 'Importuj' : 'Utwórz i zainstaluj', primary: true, icon: importMode ? 'folder' : 'download',
         onClick: async () => {
@@ -92,7 +103,7 @@ App.views = App.views || {};
           $$('[data-s]', form).forEach(i => { data.settings[i.dataset.s] = i.value.trim(); });
           if (!data.path) delete data.path;
           if (importMode && !data.path) { toast('Wskaż folder istniejącego serwera', 'warn'); return false; }
-          const s = await window.cm.call(importMode ? 'servers:import' : 'servers:create', data).catch(e => { toast(e.message, 'error', 8000); throw new Error(''); });
+          const s = await (tpl ? window.cm.call('servers:createFromTemplate', tpl.id, data) : window.cm.call(importMode ? 'servers:import' : 'servers:create', data)).catch(e => { toast(e.message, 'error', 8000); throw new Error(''); });
           await refreshList();
           App.go('servers', { id: s.id, tab: 'console' });
         },
@@ -113,7 +124,7 @@ App.views = App.views || {};
       <button class="back" data-back>${icon('back')}Serwery</button>
       <div class="detail-hero">${badge(s)}<div style="flex:1;min-width:0"><h1>${esc(s.name)}</h1><div class="row" style="margin-top:6px"><span class="st muted" style="display:flex;gap:8px;align-items:center"><span class="dot ${s.status}" data-dot></span><span data-stt>${STATUS[s.status]}</span></span><span class="dim">·</span><span class="muted">${esc(s.typeName)}${s.variant ? ' ' + esc(s.variant) : ''}${s.version ? ' ' + esc(s.version) : ''}</span><span class="dim">·</span><span class="muted">port ${s.port}</span></div></div>
         <div class="row" data-ctl></div></div>
-      <div class="tabs"><button data-tab="console">Konsola</button><button data-tab="content">${esc(content.label)}</button><button data-tab="config">Konfiguracja</button>${t.frameworks.length ? '<button data-tab="fw">Frameworki</button>' : ''}<button data-tab="backup">Kopie i harmonogram</button>${t.rcon ? '<button data-tab="rcon">RCON</button>' : ''}<button data-tab="settings">Ustawienia</button></div>
+      <div class="tabs"><button data-tab="console">Konsola</button><button data-tab="players">Gracze</button><button data-tab="stats">Statystyki</button><button data-tab="content">${esc(content.label)}</button><button data-tab="config">Konfiguracja</button>${t.frameworks.length ? '<button data-tab="fw">Frameworki</button>' : ''}${s.type === 'minecraft' && s.variant !== 'vanilla' ? '<button data-tab="map">Mapa</button>' : ''}${(s.type === 'minecraft' && ['fabric', 'quilt', 'forge', 'neoforge'].includes(s.variant)) || ['valheim', 'projectzomboid'].includes(s.type) ? '<button data-tab="sync">Synchronizacja</button>' : ''}<button data-tab="backup">Kopie i harmonogram</button><button data-tab="net">Sieć</button>${t.rcon ? '<button data-tab="rcon">RCON</button>' : ''}<button data-tab="settings">Ustawienia</button></div>
       <div data-c></div></div>`;
     $('[data-back]', el).onclick = () => App.go('servers');
     const ctl = $('[data-ctl]', el);
@@ -137,8 +148,13 @@ App.views = App.views || {};
     const c = $('[data-c]', el);
     const show = () => {
       $$('.tabs button', el).forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      App.onServerLog = null; App.onServerProgress = null;
+      App.onServerLog = null; App.onServerProgress = null; App.onServerPlayers = null; App.onServerStats = null; App.onServerChunky = null;
       if (tab === 'console') tabConsole(c, s);
+      if (tab === 'players') App.st.playersTab(c, s);
+      if (tab === 'stats') App.st.statsTab(c, s);
+      if (tab === 'map') App.st.mapTab(c, s);
+      if (tab === 'sync') App.st.syncTab(c, s);
+      if (tab === 'net') App.st.networkTab(c, s);
       if (tab === 'content') tabContent(c, s, content);
       if (tab === 'config') tabConfig(c, s);
       if (tab === 'fw') tabFrameworks(c, s);
@@ -161,7 +177,9 @@ App.views = App.views || {};
     c.innerHTML = `<div class="progress hidden" data-prog style="margin-bottom:8px"><i></i></div><div class="console-wrap"><div class="console" data-con></div><div class="console-input"><span>›</span><input placeholder="Wpisz polecenie i naciśnij Enter (np. help, say Cześć)" data-cmd></div></div>
       <div class="row" style="margin-top:8px"><span class="dim" style="font-size:12.5px;flex:1">Strzałki ↑/↓ – historia poleceń. Logi z instalacji (SteamCMD) też pojawiają się tutaj; w razie prośby o hasło Steam wpisz je w polu poleceń.</span><button class="btn sm ghost" data-clear>Wyczyść widok</button><button class="btn sm ghost" data-folder>${icon('folder')}Folder serwera</button></div>`;
     const con = $('[data-con]', c);
-    const add = l => { const d = document.createElement('div'); d.className = lineClass(l); d.textContent = l; con.appendChild(d); if (con.childElementCount > 3000) con.firstChild.remove(); };
+    const flt = App.st.consoleFilter(con, s.type);
+    c.insertBefore(flt.bar, $('.console-wrap', c));
+    const add = l => { const d = document.createElement('div'); d.className = lineClass(l); d.textContent = l; con.appendChild(d); flt.onAdd(d); if (con.childElementCount > 3000) con.firstChild.remove(); };
     const stick = () => { con.scrollTop = con.scrollHeight; };
     (await api('servers:log', s.id)).forEach(add); stick();
     if (!con.childElementCount) add('Serwer nie był jeszcze uruchamiany w tej sesji.');
@@ -240,8 +258,9 @@ App.views = App.views || {};
 
   async function tabConfig(c, s) {
     const files = await api('servers:configs', s.id);
-    c.innerHTML = `<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start"><div class="panel"><h2 style="margin-bottom:10px">Pliki konfiguracyjne</h2><div class="cfg-list"></div></div>
+    c.innerHTML = `<div data-form style="margin-bottom:12px"></div><div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start"><div class="panel"><h2 style="margin-bottom:10px">Pliki konfiguracyjne</h2><div class="cfg-list"></div></div>
       <div class="panel"><h3>Edytor</h3><p class="muted" style="font-size:13px">Pliki otwierają się w edytorze CodeManager z podświetlaniem składni i wykrywaniem błędów JSON.</p><button class="btn" data-folder>${icon('code')}Otwórz cały folder w edytorze</button></div></div>`;
+    App.st.configForm($('[data-form]', c), s).then(ok => { if (!ok) $('[data-form]', c).remove(); });
     const list = $('.cfg-list', c);
     for (const f of files) {
       const b = h(`<button class="${f.exists ? '' : 'missing'}">${icon('file')}<span style="flex:1" class="mono">${esc(f.rel)}</span>${f.exists ? '' : '<span class="chip">jeszcze nie istnieje</span>'}</button>`);
@@ -275,12 +294,16 @@ App.views = App.views || {};
       ${s.type === 'minecraft' ? `<div class="grid" style="grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label>Wersja Minecraft</label><input class="input" data-k="version" value="${esc(s.version || '')}"></div><div class="field"><label>Ścieżka Javy</label><input class="input mono" data-k="java" value="${esc(s.java || '')}" placeholder="java"></div></div>` : ''}
       ${t.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input class="input" data-s="${f.id}" value="${esc(s.settings[f.id] || '')}"></div>`).join('')}
       <div class="field"><label>Folder</label><div class="inline-input"><input class="input mono" readonly value="${esc(s.path)}"><button class="btn" data-open>${icon('folder')}</button></div></div>
+      <h3 style="margin:18px 0 8px">Powiadomienia Discord dla tego serwera</h3>
+      <div class="field"><label>Własny webhook (puste = ten z Ustawień programu)</label><input class="input mono" data-dc="url" value="${esc((s.discord || {}).url || '')}" placeholder="https://discord.com/api/webhooks/…"></div>
+      <label class="check" style="margin-bottom:14px"><input type="checkbox" data-dc="disabled" ${(s.discord || {}).disabled ? 'checked' : ''}><span>Nie wysyłaj powiadomień dla tego serwera</span></label>
       <div class="row"><button class="btn primary" data-save>${icon('save')}Zapisz</button><button class="btn" data-reinstall>${icon('download')}Zainstaluj pliki ponownie</button><span style="flex:1"></span><button class="btn danger" data-del>${icon('trash')}Usuń serwer</button></div></div>`;
     $('[data-open]', c).onclick = () => api('shell:open', s.path);
     $('[data-save]', c).onclick = async () => {
       const patch = { settings: {} };
       $$('[data-k]', c).forEach(i => { patch[i.dataset.k] = i.type === 'number' ? +i.value : i.value.trim(); });
       $$('[data-s]', c).forEach(i => { patch.settings[i.dataset.s] = i.value.trim(); });
+      patch.discord = { url: $('[data-dc="url"]', c).value.trim() || undefined, disabled: $('[data-dc="disabled"]', c).checked || undefined };
       await api('servers:patch', s.id, patch); toast('Zapisano. Zmiany zadziałają po restarcie serwera.'); App.go('servers', { id: s.id, tab: 'settings' });
     };
     $('[data-reinstall]', c).onclick = async () => { App.go('servers', { id: s.id, tab: 'console' }); window.cm.call('servers:install', s.id).catch(e => toast(e.message, 'error')); };
@@ -305,7 +328,10 @@ App.views = App.views || {};
       <div class="panel">
         <h2 style="margin-bottom:14px">Harmonogram</h2>
         <label class="check"><input type="checkbox" data-k="backup.enabled" ${b.enabled ? 'checked' : ''}><span>Automatyczne kopie zapasowe</span></label>
-        <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px;margin:8px 0 6px 26px"><div class="field"><label>Co ile godzin</label><input class="input" type="number" min="1" data-k="backup.everyHours" value="${b.everyHours || 6}"></div><div class="field"><label>Ile kopii trzymać</label><input class="input" type="number" min="1" data-k="keep" value="${sc.keep || 10}"></div></div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px;margin:8px 0 6px 26px"><div class="field"><label>Co ile godzin</label><input class="input" type="number" min="1" data-k="backup.everyHours" value="${b.everyHours || 6}"></div><div class="field"><label>Rotacja kopii</label><select class="input" data-k="retention.mode"><option value="count">Ostatnie N kopii</option><option value="gfs" ${(sc.retention || {}).mode === 'gfs' ? 'selected' : ''}>Dzienne / tygodniowe / miesięczne</option></select></div></div>
+        <div class="grid" style="grid-template-columns:1fr;gap:0 12px;margin:0 0 6px 26px" data-ret-count><div class="field"><label>Ile kopii trzymać</label><input class="input" type="number" min="1" data-k="keep" value="${sc.keep || 10}"></div></div>
+        <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:0 12px;margin:0 0 6px 26px" data-ret-gfs><div class="field"><label>Dziennych</label><input class="input" type="number" min="0" data-k="retention.daily" value="${(sc.retention || {}).daily ?? 7}"></div><div class="field"><label>Tygodniowych</label><input class="input" type="number" min="0" data-k="retention.weekly" value="${(sc.retention || {}).weekly ?? 4}"></div><div class="field"><label>Miesięcznych</label><input class="input" type="number" min="0" data-k="retention.monthly" value="${(sc.retention || {}).monthly ?? 3}"></div></div>
+        <div class="field" style="margin:0 0 6px 26px"><label>Druga lokalizacja (inny dysk albo folder OneDrive / Google Drive / Dropbox)</label><div class="inline-input"><input class="input mono" data-k="mirrorDir" value="${esc(sc.mirrorDir || '')}" placeholder="wyłączone"><button class="btn" data-mirror>${icon('folder')}</button></div><span class="hint">Każda kopia zostanie dodatkowo skopiowana tutaj (z tą samą rotacją). Folder chmury wyśle ją do internetu.</span></div>
         <label class="check" style="margin:0 0 16px 26px"><input type="checkbox" data-k="backup.whenStopped" ${b.whenStopped ? 'checked' : ''}><span>Także gdy serwer jest wyłączony</span></label>
         <label class="check"><input type="checkbox" data-k="restart.enabled" ${r.enabled ? 'checked' : ''}><span>Zaplanowane restarty (z ostrzeżeniem graczy 5 i 1 min wcześniej${t.id === 'valheim' || t.id === 'satisfactory' || t.id === 'enshrouded' ? ' – ta gra nie obsługuje komunikatów' : ''})</span></label>
         <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px;margin:8px 0 6px 26px">
@@ -317,7 +343,12 @@ App.views = App.views || {};
         <label class="check"><input type="checkbox" data-k="autoRestart.enabled" ${a.enabled ? 'checked' : ''}><span>Uruchom ponownie po awarii (maks. 3 razy na godzinę)</span></label>
         <p class="dim" style="font-size:12.5px;margin:14px 0">${next ? `Następny restart: ${new Date(next).toLocaleString('pl-PL')}` : 'Harmonogram działa, gdy CodeManager jest otwarty.'}</p>
         <button class="btn primary" data-save>${icon('save')}Zapisz harmonogram</button>
-      </div></div>`;
+      </div></div><div class="panel" style="margin-top:12px" data-tasks></div>`;
+    App.st.tasksEditor($('[data-tasks]', c), s);
+    const retSel = $('[data-k="retention.mode"]', c);
+    const syncRet = () => { $('[data-ret-count]', c).classList.toggle('hidden', retSel.value === 'gfs'); $('[data-ret-gfs]', c).classList.toggle('hidden', retSel.value !== 'gfs'); };
+    retSel.onchange = syncRet; syncRet();
+    $('[data-mirror]', c).onclick = async () => { const p = await api('dialog:folder', 'Druga lokalizacja kopii'); if (p) $('[data-k="mirrorDir"]', c).value = p; };
     const modeSel = $('[data-k="restart.mode"]', c);
     const syncMode = () => { $('[data-daily]', c).classList.toggle('hidden', modeSel.value === 'interval'); $('[data-interval]', c).classList.toggle('hidden', modeSel.value !== 'interval'); };
     modeSel.onchange = syncMode; syncMode();
@@ -329,12 +360,12 @@ App.views = App.views || {};
     });
     c.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => { await api('backup:delete', btn.dataset.del); tabBackup(c, s, t); });
     $('[data-save]', c).onclick = async () => {
-      const sch = { backup: {}, restart: {}, autoRestart: {} };
+      const sch = { backup: {}, restart: {}, autoRestart: {}, retention: {} };
       c.querySelectorAll('[data-k]').forEach(i => {
         const v = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim();
         const [k1, k2] = i.dataset.k.split('.'); if (k2) sch[k1][k2] = v; else sch[k1] = v;
       });
-      sch.backupDir = (s.schedule || {}).backupDir;
+      sch.backupDir = (s.schedule || {}).backupDir; sch.tasks = (s.schedule || {}).tasks || []; if (!sch.mirrorDir) delete sch.mirrorDir;
       await api('servers:patch', s.id, { schedule: sch }); s.schedule = sch; toast('Zapisano harmonogram'); tabBackup(c, s, t);
     };
   }
@@ -349,6 +380,6 @@ App.views = App.views || {};
 
   App.views.servers = {
     crumb: () => '<b>Serwery</b>',
-    render(el, params) { App.onServerLog = null; App.onServerProgress = null; App.onServerStatus = null; if (params.id) renderDetail(el, params); else renderList(el); },
+    render(el, params) { App.onServerLog = null; App.onServerProgress = null; App.onServerStatus = null; App.onServerPlayers = null; App.onServerStats = null; App.onServerChunky = null; if (params.id) renderDetail(el, params); else renderList(el); },
   };
 })();

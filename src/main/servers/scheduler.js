@@ -26,9 +26,38 @@ function runTar(args, cwd) {
   });
 }
 
+// ---------- rotacja kopii: zwykła (N ostatnich) albo dzienne/tygodniowe/miesięczne ----------
+const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+const weekKey = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7)); const w1 = new Date(d.getFullYear(), 0, 4); return `${d.getFullYear()}-W${1 + Math.round(((d - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7)}`; };
+const monthKey = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}`; };
+function selectKeep(files, policy = {}) {
+  const list = files.slice().sort((a, b) => b.time - a.time);
+  if (!list.length) return new Set();
+  if (policy.mode !== 'gfs') return new Set(list.slice(0, Math.max(1, +policy.keep || 10)).map(f => f.path));
+  const keep = new Set([list[0].path]);
+  const bucket = (fn, n) => { if (!(+n > 0)) return; const seen = []; for (const f of list) { const k = fn(f.time); if (seen.includes(k)) continue; if (seen.length >= +n) break; seen.push(k); keep.add(f.path); } };
+  bucket(dayKey, policy.daily); bucket(weekKey, policy.weekly); bucket(monthKey, policy.monthly);
+  return keep;
+}
+function retention(sc = {}) { return sc.retention && sc.retention.mode === 'gfs' ? sc.retention : { mode: 'count', keep: +sc.keep || 10 }; }
+
+// ---------- zadania o godzinie / co X minut ----------
+function dueTasks(tasks, now, last = {}) {
+  const d = new Date(now); const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const out = [];
+  for (const t of tasks || []) {
+    if (!t || t.enabled === false) continue;
+    if (Array.isArray(t.days) && t.days.length && !t.days.includes(d.getDay())) continue;
+    if (t.every) { const every = Math.max(1, +t.every) * 60000; if (!last[t.id] || now - last[t.id] >= every - 5000) out.push(t); continue; }
+    const times = String(t.at || '').split(',').map(x => x.trim()).filter(Boolean).map(x => x.replace(/^(\d):/, '0$1:'));
+    if (times.includes(hm) && (!last[t.id] || now - last[t.id] > 70000)) out.push(t);
+  }
+  return out;
+}
+
 class Scheduler {
   constructor(mgr, userData) {
-    this.mgr = mgr; this.userData = userData; this.busy = new Set(); this.warned = new Map();
+    this.mgr = mgr; this.userData = userData; this.busy = new Set(); this.warned = new Map(); this.taskRuns = {}; this.onBackup = null;
     this.timer = setInterval(() => this.tick().catch(e => console.error('scheduler', e)), 20000);
   }
   dir(s) { return s.schedule && s.schedule.backupDir ? s.schedule.backupDir : path.join(this.userData, 'backups', 'servers', s.id); }
@@ -70,17 +99,33 @@ class Scheduler {
       log(`✔ Zapisano ${path.basename(file)} (${(size / 1048576).toFixed(1)} MB)`);
       s.lastBackup = Date.now(); this.mgr.save();
       this.prune(s);
-      return { file, size };
-    } catch (e) { log('✖ Kopia nie powiodła się: ' + e.message); throw e; }
+      const mirror = await this.mirror(s, file).catch(e => { log('⚠ Nie udało się skopiować do drugiej lokalizacji: ' + e.message); return null; });
+      if (this.onBackup) this.onBackup(s, { file, size, reason, mirror });
+      return { file, size, mirror };
+    } catch (e) { log('✖ Kopia nie powiodła się: ' + e.message); if (this.onBackup && reason !== 'przed przywróceniem') this.onBackup(s, { error: e.message, reason }); throw e; }
     finally {
       if (running) for (const c of t.postBackup || []) { try { this.mgr.command(id, c); } catch { /* */ } }
       this.busy.delete(id);
     }
   }
   prune(s) {
-    const keep = (s.schedule && +s.schedule.keep) || 10;
     const all = this.list(s.id);
-    for (const b of all.slice(keep)) { try { fs.rmSync(b.path); fs.rmSync(b.path + '.map.json', { force: true }); } catch { /* */ } }
+    const keep = selectKeep(all, retention(s.schedule));
+    for (const b of all) if (!keep.has(b.path)) { try { fs.rmSync(b.path); fs.rmSync(b.path + '.map.json', { force: true }); } catch { /* */ } }
+  }
+  // druga lokalizacja (inny dysk, folder OneDrive/Google Drive/Dropbox)
+  mirrorDir(s) { const m = s.schedule && s.schedule.mirrorDir; return m ? path.join(m, U.safeName(s.name) + '_' + s.id) : null; }
+  async mirror(s, file) {
+    const dir = this.mirrorDir(s); if (!dir) return null;
+    fs.mkdirSync(dir, { recursive: true });
+    const dest = path.join(dir, path.basename(file));
+    await fs.promises.copyFile(file, dest);
+    if (U.exists(file + '.map.json')) await fs.promises.copyFile(file + '.map.json', dest + '.map.json');
+    const all = U.listFiles(dir).filter(f => /\.(zip|tar\.gz)$/i.test(f)).map(f => ({ path: f, time: fs.statSync(f).mtimeMs }));
+    const keep = selectKeep(all, retention(s.schedule));
+    for (const b of all) if (!keep.has(b.path)) { try { fs.rmSync(b.path); fs.rmSync(b.path + '.map.json', { force: true }); } catch { /* */ } }
+    this.mgr.log(s.id, `✔ Kopia skopiowana do ${dir}`);
+    return dest;
   }
   async restore(id, file) {
     const s = this.mgr.get(id);
@@ -119,11 +164,30 @@ class Scheduler {
     if (t.say) { try { this.mgr.command(id, t.say(text, s)); return; } catch { /* */ } }
     if (t.sayRcon) { try { await this.mgr.rconExec(id, t.sayRcon(text)); } catch { /* */ } }
   }
+  async runTask(s, t) {
+    const running = this.mgr.procs.has(s.id);
+    this.mgr.log(s.id, `=== Zadanie: ${t.name || t.kind} ===`);
+    if (t.kind === 'backup') return this.backup(s.id, 'zadanie');
+    if (t.kind === 'restart') { if (running) return this.mgr.restart(s.id); return null; }
+    if (t.kind === 'start') { if (!running) return this.mgr.start(s.id); return null; }
+    if (t.kind === 'stop') { if (running) return this.mgr.stop(s.id); return null; }
+    if (!running) return null;
+    if (t.kind === 'say') return this.announce(s.id, t.value || '');
+    for (const c of String(t.value || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean)) { try { this.mgr.command(s.id, c); } catch (e) { this.mgr.log(s.id, '✖ ' + e.message); } }
+    return null;
+  }
   async tick() {
     const now = Date.now();
     for (const s of this.mgr.servers) {
       const sc = s.schedule || {};
       const running = this.mgr.procs.has(s.id);
+      // zadania użytkownika
+      const last = this.taskRuns[s.id] = this.taskRuns[s.id] || {};
+      for (const t of dueTasks(sc.tasks, now, last)) {
+        last[t.id] = now;
+        if (!running && !['backup', 'start'].includes(t.kind)) continue;
+        this.runTask(s, t).catch(e => this.mgr.log(s.id, '✖ Zadanie: ' + e.message));
+      }
       // kopie automatyczne
       if (sc.backup && sc.backup.enabled && (running || sc.backup.whenStopped)) {
         const every = (+sc.backup.everyHours || 6) * 3600000;
@@ -149,4 +213,4 @@ class Scheduler {
   stop() { clearInterval(this.timer); }
 }
 
-module.exports = { Scheduler, runTar, tarBin };
+module.exports = { Scheduler, runTar, tarBin, selectKeep, dueTasks, retention };

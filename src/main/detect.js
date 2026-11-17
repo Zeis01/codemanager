@@ -102,6 +102,37 @@ function epicManifests() {
   return U.listFiles(dir, ['.item']).map(f => U.readJSON(f)).filter(Boolean);
 }
 
+// ---------- GOG, EA app, Ubisoft Connect, Xbox / Game Pass ----------
+function parseRegValues(stdout, name) {
+  const out = []; const re = new RegExp(`^\\s+${name.replace(/ /g, '\\s')}\\s+REG_(?:SZ|EXPAND_SZ)\\s+(.+)$`, 'gim');
+  let m; while ((m = re.exec(String(stdout)))) out.push(m[1].trim());
+  return out;
+}
+async function regValues(key, name) { if (!U.isWin) return []; const r = await U.run('reg', ['query', key, '/s', '/v', name]); return r.ok ? parseRegValues(r.stdout, name) : []; }
+async function launcherCandidates() {
+  if (!U.isWin) return [];
+  const out = [];
+  const add = (p, source) => { if (p && U.isDir(p) && !out.find(o => o.path.toLowerCase() === p.toLowerCase())) out.push({ path: p, source }); };
+  for (const p of await regValues('HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games', 'path')) add(p, 'GOG');
+  for (const p of await regValues('HKLM\\SOFTWARE\\WOW6432Node\\Electronic Arts', 'Install Dir')) add(p, 'EA app');
+  for (const p of await regValues('HKLM\\SOFTWARE\\WOW6432Node\\EA Games', 'Install Dir')) add(p, 'EA app');
+  for (const p of await regValues('HKLM\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs', 'InstallDir')) add(path.normalize(p), 'Ubisoft Connect');
+  for (const m of epicManifests()) add(m.InstallLocation, 'Epic Games');
+  for (const d of await windowsDrives()) {
+    for (const g of U.listDirs(path.join(d, 'XboxGames'))) { add(path.join(g, 'Content'), 'Xbox / Game Pass'); }
+    for (const base of ['Program Files\\EA Games', 'EA Games', 'GOG Games', 'Program Files (x86)\\GOG Galaxy\\Games']) for (const g of U.listDirs(path.join(d, base))) add(g, /EA/.test(base) ? 'EA app' : 'GOG');
+  }
+  return out;
+}
+// folder kandydata lub jego podfolder (Xbox: Content\\<gra>) z plikiem gry
+function matchCandidate(game, cands) {
+  for (const c of cands) {
+    if (hasExe(c.path, game.exe)) return c;
+    for (const sub of U.listDirs(c.path)) if (hasExe(sub, game.exe)) return { ...c, path: sub };
+  }
+  return null;
+}
+
 // ---------- Minecraft: instancje z launcherów ----------
 function mcVersionFromId(id) {
   if (!id) return {};
@@ -186,7 +217,7 @@ async function scanCommonFolders(game) {
   const out = [];
   const names = [game.name, game.name.replace(/[^\w\s]/g, ''), game.name.replace(/\s+/g, '')];
   for (const d of await windowsDrives()) {
-    for (const base of ['Games', 'Gry', 'Program Files', 'Program Files (x86)', 'Program Files\\Rockstar Games', 'Program Files\\Epic Games', 'Epic Games', 'Rockstar Games', 'GOG Games', '']) {
+    for (const base of ['Games', 'Gry', 'Program Files', 'Program Files (x86)', 'Program Files\\Rockstar Games', 'Program Files\\Epic Games', 'Epic Games', 'Rockstar Games', 'GOG Games', 'Program Files\\EA Games', 'EA Games', 'XboxGames', '']) {
       for (const n of names) {
         const p = path.join(d, base, n);
         if (U.isDir(p) && hasExe(p, game.exe)) out.push(p);
@@ -199,6 +230,7 @@ async function scanCommonFolders(game) {
 async function detectAll(config) {
   const steam = await steamApps(config.settings && config.settings.steamPath, true);
   const epic = U.isWin ? epicManifests() : [];
+  let launchers = null;
   const results = {};
   for (const g of GAMES) {
     const saved = (config.games || {})[g.id] || {};
@@ -228,6 +260,11 @@ async function detectAll(config) {
           if (p && U.isDir(p)) { found = { found: true, path: p, source: 'Rockstar Launcher' }; break; }
         }
       }
+      if (!found && g.exe && g.exe.length) {
+        if (!launchers) launchers = await launcherCandidates().catch(() => []);
+        const c = matchCandidate(g, launchers);
+        if (c) found = { found: true, path: c.path, source: c.source };
+      }
       if (!found && g.extraPaths) { const p = g.extraPaths.find(x => U.isDir(x) && hasExe(x, g.exe)); if (p) found = { found: true, path: p, source: 'Instalacja samodzielna' }; }
       if (!found) {
         const scan = await scanCommonFolders(g);
@@ -248,4 +285,4 @@ async function detectAll(config) {
   return { games: results, steam: { roots: steam.roots, libraries: steam.libraries } };
 }
 
-module.exports = { detectAll, steamApps, workshopDir, minecraftInstances, mcVersionFromId, userdataDirs };
+module.exports = { parseRegValues, matchCandidate, detectAll, steamApps, workshopDir, minecraftInstances, mcVersionFromId, userdataDirs };

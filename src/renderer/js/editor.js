@@ -43,12 +43,14 @@ App.views = App.views || {};
         <div class="ed-host"><div class="ed-welcome"><div><h2>Edytor CodeManager</h2><p>Otwórz folder gry lub serwera, aby edytować pliki konfiguracyjne i skrypty.</p>
           <button class="btn primary" data-openfolder>${icon('folderOpen')}Otwórz folder</button>
           <div class="keys"><span class="kbd">Ctrl+S</span><span>Zapisz</span><span class="kbd">Ctrl+P</span><span>Szybkie otwieranie pliku</span><span class="kbd">Ctrl+Shift+F</span><span>Szukaj w plikach</span><span class="kbd">Ctrl+F / Ctrl+H</span><span>Znajdź / zamień</span><span class="kbd">Ctrl+Spacja</span><span>Podpowiedzi i snippety</span><span class="kbd">Alt+Shift+F</span><span>Formatuj (JSON)</span></div></div></div></div>
-        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><span data-st-prob></span><span data-st-pos></span><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
+        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><button data-st-diff title="Porównaj z wersją zapisaną na dysku">Porównaj</button><button data-st-tree title="Podgląd struktury pliku (JSON, TOML, YAML, INI)">Struktura</button><span data-st-prob></span><span data-st-pos></span><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
       </div></div>`);
     S.el = el;
     $$('[data-side]', el).forEach(b => b.onclick = () => { if (S.side === b.dataset.side && S.sideOpen) { S.sideOpen = false; } else { S.side = b.dataset.side; S.sideOpen = true; } renderSide(); });
     $('[data-openfolder]', el).onclick = openFolderDialog;
     $('[data-st-lang]', el).onclick = pickLanguage;
+    $('[data-st-tree]', el).onclick = structurePreview;
+    $('[data-st-diff]', el).onclick = () => { const t = S.tabs.find(x => x.path === S.active); if (t && !t.untitled) diffWithDisk(t); };
     return el;
   }
 
@@ -117,6 +119,7 @@ App.views = App.views || {};
     const dir = it.dir ? it.path : P().dirname(it.path);
     const m = h(`<div class="ctx-menu" style="left:${x}px;top:${y}px">
       <button data-a="newfile">Nowy plik</button><button data-a="newdir">Nowy folder</button><hr>
+      ${it.dir ? '' : `<button data-a="cmpbase">Wybierz do porównania</button>${S.compareBase && S.compareBase !== it.path ? `<button data-a="cmpwith">Porównaj z „${esc(P().basename(S.compareBase))}”</button>` : ''}<button data-a="cmppick">Porównaj z plikiem…</button><hr>`}
       <button data-a="rename">Zmień nazwę</button><button data-a="copy">Kopiuj ścieżkę</button><button data-a="show">Pokaż w eksploratorze</button>${it.dir ? '<button data-a="root">Otwórz jako folder główny</button>' : ''}<hr>
       <button data-a="del" style="color:var(--coral)">Przenieś do kosza</button></div>`);
     document.body.appendChild(m);
@@ -130,6 +133,9 @@ App.views = App.views || {};
       if (act === 'newfile') newEntry(dir, false);
       if (act === 'newdir') newEntry(dir, true);
       if (act === 'copy') { navigator.clipboard.writeText(it.path); toast('Skopiowano ścieżkę'); }
+      if (act === 'cmpbase') { S.compareBase = it.path; toast(`Wybrano ${it.name} – kliknij prawym inny plik i wybierz „Porównaj”`); }
+      if (act === 'cmpwith') diffFiles(S.compareBase, it.path);
+      if (act === 'cmppick') { const f = (await api('dialog:files', 'Wybierz plik do porównania'))[0]; if (f) diffFiles(it.path, f); }
       if (act === 'show') api('shell:show', it.path);
       if (act === 'root') { S.root = it.path; S.expanded = new Set(); renderSide(); }
       if (act === 'rename') {
@@ -247,7 +253,8 @@ App.views = App.views || {};
       const model = S.monaco.editor.getModel(uri) || S.monaco.editor.createModel(data.content, lang, uri);
       model.setValue(data.content);
       t = { path, name: P().basename(path), model, bom: data.bom, eol: data.eol, saved: model.getAlternativeVersionId(), view: null, isNew: !!opts.create };
-      model.onDidChangeContent(() => { renderTabs(); if (App.state.settings.editorAutosave) { clearTimeout(t.auto); t.auto = setTimeout(() => save(t), 1000); } });
+      model.onDidChangeContent(() => { renderTabs(); validate(t); if (App.state.settings.editorAutosave) { clearTimeout(t.auto); t.auto = setTimeout(() => save(t), 1000); } });
+      validate(t, 0);
       S.tabs.push(t);
     }
     activate(t);
@@ -318,6 +325,61 @@ App.views = App.views || {};
     renderTabs(); updateStatus();
     return true;
   }
+  // ---------- walidacja TOML / YAML (parsery z procesu głównego) ----------
+  function validate(t, delay = 450) {
+    const lang = t.model.getLanguageId(); if (!['toml', 'yaml'].includes(lang)) return;
+    clearTimeout(t.vt);
+    t.vt = setTimeout(async () => {
+      if (t.model.isDisposed()) return;
+      const errs = await App.apiQuiet('fs:validate', lang, t.model.getValue()).catch(() => []);
+      if (t.model.isDisposed()) return;
+      S.monaco.editor.setModelMarkers(t.model, 'cm-validate', errs.map(e => ({ severity: e.warn ? 4 : 8, message: e.msg, startLineNumber: e.line, startColumn: e.col, endLineNumber: e.line, endColumn: e.col + 1 })));
+    }, delay);
+  }
+
+  // ---------- podgląd struktury ----------
+  function treeHtml(v, depth = 0) {
+    if (v === null || typeof v !== 'object') return `<span class="tv ${typeof v}">${esc(typeof v === 'string' ? `"${v}"` : String(v))}</span>`;
+    const entries = Array.isArray(v) ? v.map((x, i) => [i, x]) : Object.entries(v);
+    if (!entries.length) return `<span class="dim">${Array.isArray(v) ? '[ ]' : '{ }'}</span>`;
+    return `<div class="tree-v">${entries.map(([k, x]) => x !== null && typeof x === 'object' ? `<details ${depth < 1 ? 'open' : ''}><summary><span class="tk">${esc(k)}</span> <span class="dim">${Array.isArray(x) ? `[${x.length}]` : `{${Object.keys(x).length}}`}</span></summary>${treeHtml(x, depth + 1)}</details>` : `<div><span class="tk">${esc(k)}</span>: ${treeHtml(x, depth + 1)}</div>`).join('')}</div>`;
+  }
+  async function structurePreview() {
+    const t = S.tabs.find(x => x.path === S.active); if (!t) return;
+    const lang = t.model.getLanguageId();
+    try {
+      const data = await App.apiQuiet('fs:parse', lang === 'srccfg' ? 'ini' : lang, t.model.getValue());
+      const clean = data && data.__root && Object.keys(data).length === 1 ? data.__root : data;
+      modal({ title: `Struktura: ${t.name}`, wide: true, body: `<div class="struct">${treeHtml(clean)}</div>` });
+    } catch (e) { toast(e.message, 'warn', 6000); }
+  }
+
+  // ---------- porównywanie plików (diff) ----------
+  async function showDiff(left, right, titleL, titleR, lang) {
+    await ensureEditor();
+    const host = $('.ed-host', S.el);
+    $$('.ed-diff', host).forEach(x => { if (x._dispose) x._dispose(); x.remove(); });
+    const box = h(`<div class="ed-diff"><div class="ed-diff-h"><span class="mono">${esc(titleL)}</span><span class="dim">↔</span><span class="mono">${esc(titleR)}</span><span class="grow"></span><span class="dim" data-cnt></span><button class="btn sm" data-x>${icon('x')}Zamknij porównanie</button></div><div class="ed-diff-b"></div></div>`);
+    host.appendChild(box);
+    const m1 = S.monaco.editor.createModel(left, lang), m2 = S.monaco.editor.createModel(right, lang);
+    const de = S.monaco.editor.createDiffEditor($('.ed-diff-b', box), { theme: 'codemanager', automaticLayout: true, readOnly: true, originalEditable: false, renderSideBySide: true, fontSize: App.state.settings.editorFontSize || 14, fontFamily: "'JBMono', 'Cascadia Code', Consolas, monospace" });
+    de.setModel({ original: m1, modified: m2 });
+    de.onDidUpdateDiff(() => { const ch = de.getLineChanges() || []; $('[data-cnt]', box).textContent = ch.length ? App.plural(ch.length, 'zmiana', 'zmiany', 'zmian') : 'Pliki są identyczne'; });
+    box._dispose = () => { de.dispose(); m1.dispose(); m2.dispose(); };
+    $('[data-x]', box).onclick = () => { box._dispose(); box.remove(); };
+  }
+  async function diffFiles(a, b) {
+    try {
+      const [x, y] = await Promise.all([App.apiQuiet('fs:readFile', a), App.apiQuiet('fs:readFile', b)]);
+      showDiff(x.content, y.content, P().basename(a), P().basename(b), EditorLangs.languageFor(a));
+    } catch (e) { toast(e.message, 'error'); }
+  }
+  async function diffWithDisk(t) {
+    try { const d = await App.apiQuiet('fs:readFile', t.path); showDiff(d.content, t.model.getValue(), `${t.name} (na dysku)`, `${t.name} (w edytorze)`, t.model.getLanguageId()); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  App.editorDiff = diffFiles;
+
   function updateStatus() {
     const t = S.tabs.find(x => x.path === S.active);
     $('[data-st-file]', S.el).textContent = t ? (isDirty(t) ? '● ' : '') + t.name : 'Brak pliku';
@@ -330,7 +392,7 @@ App.views = App.views || {};
     const t = S.tabs.find(x => x.path === S.active); if (!t) return;
     const langs = S.monaco.languages.getLanguages().map(l => l.id).sort();
     const m = modal({ title: 'Język pliku', body: `<select class="input" size="12">${langs.map(l => `<option ${l === t.model.getLanguageId() ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`,
-      actions: [{ label: 'Anuluj' }, { label: 'Ustaw', primary: true, onClick: ({ body }) => { S.monaco.editor.setModelLanguage(t.model, $('select', body).value); updateStatus(); } }] });
+      actions: [{ label: 'Anuluj' }, { label: 'Ustaw', primary: true, onClick: ({ body }) => { S.monaco.editor.setModelLanguage(t.model, $('select', body).value); updateStatus(); validate(t, 0); } }] });
     $('select', m.body).style.height = '280px';
   }
   async function quickOpen() {
@@ -353,6 +415,7 @@ App.views = App.views || {};
     if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
     if (e.ctrlKey && e.key.toLowerCase() === 'p' && !e.shiftKey) { e.preventDefault(); quickOpen(); }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); S.side = 'search'; S.sideOpen = true; renderSide(); }
+    if (e.key === 'Escape') { const d = S.el && $('.ed-diff', S.el); if (d) { d._dispose(); d.remove(); } }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') { e.preventDefault(); S.side = 'explorer'; S.sideOpen = true; renderSide(); }
   });
   window.addEventListener('beforeunload', e => { if (S.tabs.some(isDirty)) { e.returnValue = false; } });

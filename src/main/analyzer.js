@@ -212,4 +212,31 @@ function readTail(file, max = 3 * 1024 * 1024) {
   return buf.toString('utf8');
 }
 
-module.exports = { analyzeText, headline, summarizeReport, buildPackageIndex, blameFromStack, logCandidates, readTail, RULE_COUNT: () => R.length };
+// Linki do wklejek z logami → adres surowego tekstu
+function rawUrl(input) {
+  let u; try { u = new URL(String(input).trim()); } catch { throw new Error('To nie jest prawidłowy adres.'); }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Obsługiwane są tylko adresy http(s).');
+  const host = u.hostname.replace(/^www\./, '').toLowerCase();
+  const seg = u.pathname.split('/').filter(Boolean);
+  if (host === 'mclo.gs' && seg[0]) return `https://api.mclo.gs/1/raw/${seg[0]}`;
+  if (host === 'api.mclo.gs') return u.toString();
+  if (host === 'pastebin.com' && seg[0]) return seg[0] === 'raw' ? u.toString() : `https://pastebin.com/raw/${seg[0]}`;
+  if (host === 'gist.github.com' && seg.length >= 2) return `https://gist.githubusercontent.com/${seg[0]}/${seg[1]}/raw`;
+  if (host === 'paste.ee' && seg[1]) return `https://paste.ee/r/${seg[1]}`;
+  if (host === 'pastes.dev' && seg[0]) return `https://api.pastes.dev/${seg[0]}`;
+  if ((host === 'hastebin.com' || host === 'toptal.com') && seg.length) { const id = seg[seg.length - 1].replace(/\..*$/, ''); return host === 'toptal.com' ? `https://www.toptal.com/developers/hastebin/raw/${id}` : `https://hastebin.com/raw/${id}`; }
+  if (host === 'hastebin.skyra.pw' && seg[0]) return `https://hastebin.skyra.pw/raw/${seg[seg.length - 1].replace(/\..*$/, '')}`;
+  if (host === 'paste.gg' || host === 'gnomebin.com') return u.toString();
+  return u.toString();
+}
+async function fetchLog(input, fetchImpl = fetch) {
+  const url = rawUrl(input);
+  const r = await fetchImpl(url, { headers: { 'User-Agent': 'CodeManager', Accept: 'text/plain, */*' } });
+  if (!r.ok) throw new Error(`Nie udało się pobrać logu (HTTP ${r.status}).`);
+  const type = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+  const text = await r.text();
+  if (/text\/html/i.test(type) && /<html/i.test(text.slice(0, 500))) throw new Error('Pod tym adresem jest strona WWW, a nie surowy log. Wklej link do wersji „raw”.');
+  return { url, text: text.length > 6 * 1024 * 1024 ? text.slice(-6 * 1024 * 1024) : text };
+}
+
+module.exports = { rawUrl, fetchLog, analyzeText, headline, summarizeReport, buildPackageIndex, blameFromStack, logCandidates, readTail, RULE_COUNT: () => R.length };

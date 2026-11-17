@@ -34,6 +34,32 @@ App.views.settings = {
           <div class="row" style="margin-top:12px"><button class="btn" data-ud>${icon('folder')}Otwórz dane aplikacji</button></div>
           <p class="dim" style="font-size:12.5px;margin:14px 0 0">Kopie zapasowe plików nadpisanych przez instalatory trafiają do podfolderu <span class="mono">backups</span>.</p>
         </div>
+      </div>
+      <div class="grid two" style="align-items:start;margin-top:12px">
+        <div class="panel">
+          <h2 style="margin-bottom:12px">Powiadomienia</h2>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-n="enabled" ${(s.notifications || {}).enabled !== false ? 'checked' : ''}><span>Powiadomienia systemowe Windows</span></label>
+          <div class="checks-grid" style="margin:0 0 12px 26px">${[['crash', 'Serwer padł', true], ['backup', 'Kopia zapasowa gotowa', true], ['backup-failed', 'Kopia nie powiodła się', true], ['update', 'Nowa wersja programu', true], ['join', 'Gracz dołączył', false], ['start', 'Serwer uruchomiony', false]].map(([k, l, d]) => `<label class="check"><input type="checkbox" data-ne="${k}" ${((s.notifications || {}).events || {})[k] ?? d ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+          <button class="btn sm ghost" data-ntest>${icon('bulb')}Pokaż testowe powiadomienie</button>
+          <h3 style="margin:20px 0 8px">Discord</h3>
+          <div class="field"><label>Webhook kanału</label><div class="inline-input"><input class="input mono" data-dc value="${esc((s.discord || {}).url || '')}" placeholder="https://discord.com/api/webhooks/…"><button class="btn" data-dctest>Test</button></div><span class="hint">Ustawienia kanału Discord → Integracje → Webhooki → Nowy webhook → Kopiuj adres. Każdy serwer może mieć własny webhook (zakładka Ustawienia serwera).</span></div>
+          <div class="checks-grid" style="margin:0 0 12px">${[['start', 'Start serwera', true], ['stop', 'Zatrzymanie', true], ['crash', 'Awaria', true], ['join', 'Wejście gracza', false], ['leave', 'Wyjście gracza', false], ['backup', 'Kopia zapasowa', true], ['backup-failed', 'Błąd kopii', true]].map(([k, l, d]) => `<label class="check"><input type="checkbox" data-de="${k}" ${((s.discord || {}).events || {})[k] ?? d ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+          <button class="btn primary" data-nsave>${icon('save')}Zapisz powiadomienia</button>
+        </div>
+        <div class="panel">
+          <h2 style="margin-bottom:12px">Program</h2>
+          <div class="field"><label>Język / Language</label><select class="input" data-k="language"><option value="pl">Polski</option><option value="en" ${s.language === 'en' ? 'selected' : ''}>English</option></select><span class="hint">Język interfejsu. Opisy problemów z analizy modów i logów są po polsku.</span></div>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="tray" ${s.tray ? 'checked' : ''}><span>Ikona w zasobniku systemowym – zamknięcie okna nie wyłącza serwerów</span></label>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="trackPlaytime" ${s.trackPlaytime !== false ? 'checked' : ''}><span>Licz czas gry (sprawdza co 30 s, czy gra jest uruchomiona)</span></label>
+          <h3 style="margin:18px 0 8px">Mody</h3>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="autoSnapshot" ${s.autoSnapshot !== false ? 'checked' : ''}><span>Migawka przed zmianami (aktualizacja, instalacja, profil, naprawa)</span></label>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px;margin-left:26px"><div class="field"><label>Ile migawek na grę</label><input class="input" type="number" min="2" max="100" data-k="snapshotKeep" value="${esc(s.snapshotKeep || 10)}"></div><div class="field"><label>Limit migawki automatycznej (GB)</label><input class="input" type="number" min="0.1" step="0.5" data-k="autoSnapshotMaxGB" value="${esc(s.autoSnapshotMaxGB || 1)}"></div></div>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="programTrash" ${s.programTrash !== false ? 'checked' : ''}><span>Usunięte mody trzymaj 30 dni w koszu CodeManager</span></label>
+          <div class="row" style="margin:0 0 4px 26px"><button class="btn sm" data-trash>${icon('trash')}Otwórz kosz</button></div>
+          <div class="field" style="margin-top:10px"><label>Ile kopii zapisów gry trzymać</label><input class="input" type="number" min="3" max="200" data-k="saveKeep" value="${esc(s.saveKeep || 20)}" style="max-width:160px"></div>
+          <h3 style="margin:18px 0 8px">Tryb przenośny</h3>
+          <div data-portable><span class="dim">…</span></div>
+        </div>
       </div>`;
     const drawThemes = () => {
       const box = $('[data-themes]', el); box.innerHTML = '';
@@ -107,9 +133,35 @@ App.views.settings = {
       if (key !== lastShown) { lastShown = key; drawUp(); }
     };
     $$('input[type=checkbox][data-k], input[type=number][data-k]', el).forEach(i => i.onchange = save);
+    $('[data-k="language"]', el).onchange = async e => { await save(); App.setLanguage(e.target.value); };
+    $('[data-k="tray"]', el).addEventListener('change', () => setTimeout(() => api('tray:apply'), 100));
+    $('[data-trash]', el).onclick = () => App.mt.trashModal(null);
+    $('[data-ntest]', el).onclick = () => api('notify:testSystem');
+    $('[data-dctest]', el).onclick = async () => { await api('notify:test', $('[data-dc]', el).value.trim()); toast('Wysłano wiadomość testową na Discorda'); };
+    $('[data-nsave]', el).onclick = async () => {
+      const ev = {}; $$('[data-ne]', el).forEach(i => { ev[i.dataset.ne] = i.checked; });
+      const de = {}; $$('[data-de]', el).forEach(i => { de[i.dataset.de] = i.checked; });
+      const url = $('[data-dc]', el).value.trim();
+      if (url && !/^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(url)) { toast('To nie wygląda na adres webhooka Discord.', 'warn'); return; }
+      App.state.settings = await api('settings:set', { notifications: { enabled: $('[data-n="enabled"]', el).checked, events: ev }, discord: { url: url || undefined, events: de } });
+      toast('Zapisano powiadomienia');
+    };
+    const pb = $('[data-portable]', el);
+    const drawPortable = async () => {
+      const p = await api('portable:status');
+      pb.innerHTML = p.active
+        ? `<p style="margin:0 0 8px">Włączony – dane programu są w folderze obok programu:<br><span class="path">${esc(p.dir)}</span></p><button class="btn sm" data-pdis>Przenieś dane z powrotem do AppData</button>`
+        : p.available
+          ? `<p class="muted" style="margin:0 0 8px;font-size:13px">Wszystkie dane (ustawienia, profile, migawki, kopie, motywy) będą trzymane w folderze <span class="mono">CodeManager-data</span> obok programu – wygodne na pendrive. Obecne dane zostaną skopiowane, a program uruchomi się ponownie.</p><button class="btn sm primary" data-pen>Włącz tryb przenośny</button>`
+          : `<p class="dim" style="margin:0;font-size:12.5px">Dostępny w wersji przenośnej i ZIP. Wersja instalowana trzyma dane w AppData (${esc(p.defaultDir)}).${p.mode !== 'installer' && !p.writable ? ' Folder programu jest tylko do odczytu.' : ''}</p>`;
+      const en = $('[data-pen]', pb); if (en) en.onclick = async () => { if (!(await App.confirmBox('Włączyć tryb przenośny?', 'Dane zostaną skopiowane obok programu, a CodeManager uruchomi się ponownie. Działające serwery zostaną zatrzymane.', 'Włącz'))) return; App.runJob('Tryb przenośny', jobId => window.cm.call('portable:enable', jobId), { doneMsg: 'Uruchamiam ponownie…' }); };
+      const ds = $('[data-pdis]', pb); if (ds) ds.onclick = async () => { if (!(await App.confirmBox('Wyłączyć tryb przenośny?', 'Dane zostaną skopiowane do AppData, a CodeManager uruchomi się ponownie.', 'Wyłącz'))) return; App.runJob('Tryb przenośny', jobId => window.cm.call('portable:disable', jobId), { doneMsg: 'Uruchamiam ponownie…' }); };
+    };
+    drawPortable();
     async function save() {
       const patch = {};
       $$('[data-k]', el).forEach(i => { patch[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });
+      if (patch.language) localStorage.setItem('cm-lang', patch.language);
       App.state.settings = await api('settings:set', patch);
       toast('Zapisano ustawienia');
     }

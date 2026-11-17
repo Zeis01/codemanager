@@ -274,9 +274,10 @@ function checkBethesda(ctx) {
   const seDll = U.listFiles(ctx.gamePath).map(f => path.basename(f)).find(f => new RegExp(`^${B.se}_(\\d+)_(\\d+)_(\\d+)\\.dll$`, 'i').test(f));
   const seVer = seDll ? seDll.match(/_(\d+)_(\d+)_(\d+)\.dll$/i).slice(1).join('.') : null;
   rep.meta = { 'Wersja gry': gv || 'nieznana', [B.se.toUpperCase()]: seVer ? `dla ${seVer}` : 'brak' };
-  if (gv && seVer && !gv.startsWith(seVer + '.')) rep.error(`${B.se.toUpperCase()} jest dla wersji ${seVer}, a gra to ${gv}`, { fix: `Pobierz ${B.se.toUpperCase()} dla Twojej wersji gry. Do tego czasu mody wymagające ${B.se.toUpperCase()} nie zadziałają.` });
+  if (gv && seVer && !gv.startsWith(seVer + '.')) rep.error(`${B.se.toUpperCase()} jest dla wersji ${seVer}, a gra to ${gv}`, { fix: `Pobierz ${B.se.toUpperCase()} dla Twojej wersji gry. Do tego czasu mody wymagające ${B.se.toUpperCase()} nie zadziałają.`, action: { type: 'loader', id: id === 'skyrimse' ? 'skse' : 'f4se', label: `Zainstaluj właściwy ${B.se.toUpperCase()}` } });
   const sePlugins = U.listFiles(path.join(ctx.gamePath, ...B.addr.split('/')), ['.dll']);
-  if (sePlugins.length && !seVer) rep.error(`Masz wtyczki ${B.se.toUpperCase()}, ale nie zainstalowano ${B.se.toUpperCase()}`, { fix: `Zainstaluj ${B.se.toUpperCase()} i uruchamiaj grę przez ${B.se}_loader.exe.` });
+  const seLoader = id === 'skyrimse' ? 'skse' : 'f4se';
+  if (sePlugins.length && !seVer) rep.error(`Masz wtyczki ${B.se.toUpperCase()}, ale nie zainstalowano ${B.se.toUpperCase()}`, { fix: `Zainstaluj ${B.se.toUpperCase()} i uruchamiaj grę przez ${B.se}_loader.exe.`, action: { type: 'loader', id: seLoader, label: `Zainstaluj ${B.se.toUpperCase()}` } });
   if (sePlugins.length && !U.listFiles(path.join(ctx.gamePath, ...B.addr.split('/'))).some(f => B.addrRe.test(path.basename(f)))) rep.warn('Brak Address Library – wiele wtyczek DLL bez niej się nie uruchomi', { fix: 'Zainstaluj „Address Library for SKSE/F4SE Plugins” z Nexus Mods (wersja „All in one”).' });
   const dataDir = path.join(ctx.gamePath, 'Data');
   const files = U.listFiles(dataDir).filter(f => /\.(esp|esm|esl)$/i.test(f));
@@ -349,4 +350,4 @@ function checkSevenDays(ctx) {
   return rep.finish();
 }
 
-module.exports = { checkRimWorld, rimToggle, checkStardew, checkFactorio, factorioToggle, factorioUpdates, checkBethesda, pluginsTxtToggle, checkSevenDays, readPluginHeader, parseFDep, BETHESDA, readManifests, factorioUserDir };
+module.exports = { checkRimWorld, rimToggle, checkStardew, checkFactorio, factorioToggle, factorioUpdates, checkBethesda, pluginsTxtToggle, checkSevenDays, readPluginHeader, parseFDep, BETHESDA, readManifests, factorioUserDir, pluginsTxt, readLoadOrder, rimReadMods, rimActive, rimConfigPath, xmlList };

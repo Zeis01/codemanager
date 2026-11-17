@@ -2,7 +2,7 @@
 'use strict';
 App.views = App.views || {};
 (function () {
-  const { h, $, $$, icon, esc, api, toast } = App;
+  const { h, $, $$, icon, esc, api, toast, modal } = App;
   let last = { kind: 'game', gameId: null, profileId: null, serverId: null };
 
   function findingCard(f, target, onFixed) {
@@ -19,17 +19,25 @@ App.views = App.views || {};
     return el;
   }
 
-  function renderResult(box, r, target) {
+  function renderResult(box, r, target, file) {
     const hl = r.headline;
     box.innerHTML = '';
-    box.appendChild(h(`<div class="explain ${hl.tone}"><div class="explain-ic">${icon(hl.tone === 'ok' ? 'ok' : hl.tone === 'warn' ? 'alert' : 'bulb')}</div><div><div class="explain-t">${esc(hl.text)}</div><div class="muted" style="margin-top:4px">${esc(hl.sub)}</div>
-      <div class="dim" style="font-size:12px;margin-top:8px">Przeanalizowano ${r.stats.lines.toLocaleString('pl-PL')} wierszy · ${r.stats.errorLines} wierszy z błędami</div></div></div>`));
+    const head = h(`<div class="explain ${hl.tone}"><div class="explain-ic">${icon(hl.tone === 'ok' ? 'ok' : hl.tone === 'warn' ? 'alert' : 'bulb')}</div><div style="flex:1"><div class="explain-t">${esc(hl.text)}</div><div class="muted" style="margin-top:4px">${esc(hl.sub)}</div>
+      <div class="dim" style="font-size:12px;margin-top:8px">Przeanalizowano ${r.stats.lines.toLocaleString('pl-PL')} wierszy · ${r.stats.errorLines} wierszy z błędami${r.url ? ` · pobrano z ${esc(r.url)}` : ''}</div></div><button class="btn sm" data-report title="Lista modów, wersje, system i błąd w jednym pliku – do wklejenia na Discorda lub forum">${icon('file')}Raport do wysłania</button></div>`);
+    $('[data-report]', head).onclick = () => reportModal(target, r, file || r.file);
+    box.appendChild(head);
     for (const f of r.findings) box.appendChild(findingCard(f, target));
   }
+  async function reportModal(target, analysis, file) {
+    const text = await api('report:build', { target, analysis: analysis ? { findings: analysis.findings } : null, file });
+    const body = h(`<div><p class="muted" style="margin-top:0">Ścieżki z nazwą Twojego konta są zastąpione <span class="mono">%USERPROFILE%</span>. Sprawdź treść przed wysłaniem.</p><textarea class="input mono" rows="16" readonly>${esc(text)}</textarea></div>`);
+    modal({ title: 'Raport do wysłania', wide: true, body, actions: [{ label: 'Zapisz do pliku', icon: 'save', onClick: async () => { const p = await api('report:save', text); if (p) { toast('Zapisano raport'); api('shell:show', p); } return false; } }, { label: 'Kopiuj', primary: true, icon: 'file', onClick: async () => { await navigator.clipboard.writeText(text); toast('Skopiowano raport do schowka'); return false; } }] });
+  }
+  App.reportModal = reportModal;
 
   async function analyzeFile(box, file, ctx, target) {
     box.innerHTML = '<div class="panel"><p class="muted" style="margin-top:0">Czytam log i szukam znanych problemów…</p><div class="progress indet"><i></i></div></div>';
-    try { const r = await App.apiQuiet('analyzer:analyze', file, ctx); renderResult(box, r, target); }
+    try { const r = await App.apiQuiet('analyzer:analyze', file, ctx); renderResult(box, r, target, file); }
     catch (e) { box.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; }
   }
 
@@ -40,7 +48,7 @@ App.views = App.views || {};
     const games = det ? App.state.defs.games.filter(g => det.games[g.id] && det.games[g.id].found) : [];
     if (!last.gameId && games[0]) last.gameId = games[0].id;
     el.innerHTML = `
-      <div class="head"><div class="grow"><h1>Analizator błędów</h1><p class="lead">Wybierz grę lub serwer, a CodeManager przeczyta logi i raporty awarii, rozpozna znane problemy (${'ponad 50 reguł'}) i wyjaśni je prostym językiem – bez sztucznej inteligencji, na podstawie wzorców błędów.</p></div></div>
+      <div class="head"><div class="grow"><h1>Analizator błędów</h1><p class="lead">Wybierz grę lub serwer, a CodeManager przeczyta logi i raporty awarii, rozpozna znane problemy (ponad 50 reguł) i wyjaśni je prostym językiem – bez sztucznej inteligencji, na podstawie wzorców błędów. Możesz też przeciągnąć tu plik logu albo link.</p></div></div>
       <div class="grid" style="grid-template-columns:320px minmax(0,1fr);align-items:start">
         <div class="panel">
           <div class="seg" style="margin-bottom:14px"><button data-kind="game">Gra</button><button data-kind="server">Serwer</button><button data-kind="file">Plik / tekst</button></div>
@@ -59,10 +67,12 @@ App.views = App.views || {};
         src.innerHTML = `<div class="field"><label>Gra</label><select class="input" data-g>${games.map(x => `<option value="${x.id}" ${x.id === g.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
           ${profiles.length > 1 ? `<div class="field"><label>${g.id === 'minecraft' ? 'Instancja' : 'Profil'}</label><select class="input" data-p>${profiles.map(p => `<option value="${esc(p.id)}" ${p.id === last.profileId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>` : ''}
           <div class="field"><label>Znalezione logi</label><div class="loglist" data-logs><div class="progress indet"><i></i></div></div></div>
-          <button class="btn" style="width:100%;justify-content:center" data-compat>${icon('shield')}Sprawdź zgodność modów po ludzku</button>`;
+          <button class="btn" style="width:100%;justify-content:center" data-compat>${icon('shield')}Sprawdź zgodność modów po ludzku</button>
+          <button class="btn ghost" style="width:100%;justify-content:center;margin-top:6px" data-rep>${icon('file')}Raport do wysłania (bez logu)</button>`;
         $('[data-g]', src).onchange = e => { last.gameId = e.target.value; last.profileId = null; drawSrc(); };
         const ps = $('[data-p]', src); if (ps) ps.onchange = e => { last.profileId = e.target.value; drawSrc(); };
         const target = { gameId: g.id, profileId: last.profileId };
+        $('[data-rep]', src).onclick = () => reportModal(target, null, null);
         $('[data-compat]', src).onclick = async () => {
           out.innerHTML = '<div class="progress indet"><i></i></div>';
           const rep = await api('mods:check', g.id, last.profileId); App.state.reports[g.id] = rep;
@@ -82,16 +92,31 @@ App.views = App.views || {};
         const logs = await api('analyzer:serverCandidates', last.serverId);
         drawLogs($('[data-logs]', src), logs, f => analyzeFile(out, f, { serverId: last.serverId }, { serverId: last.serverId }));
       } else {
-        src.innerHTML = `<button class="btn" style="width:100%;justify-content:center" data-file>${icon('file')}Wybierz plik logu…</button><p class="muted" style="text-align:center;margin:10px 0">albo wklej treść</p><textarea class="input mono" rows="10" placeholder="Wklej log lub raport awarii…" data-t></textarea><button class="btn primary" style="margin-top:8px;width:100%;justify-content:center" data-go>${icon('search')}Analizuj</button>
+        src.innerHTML = `<button class="btn" style="width:100%;justify-content:center" data-file>${icon('file')}Wybierz plik logu…</button>
+          <div class="field" style="margin-top:12px"><label>Link do logu (mclo.gs, pastebin, gist…)</label><div class="inline-input"><input class="input" placeholder="https://mclo.gs/abc123" data-url><button class="btn" data-urlgo>${icon('globe')}</button></div></div>
+          <p class="muted" style="text-align:center;margin:10px 0">albo wklej treść</p><textarea class="input mono" rows="10" placeholder="Wklej log lub raport awarii…" data-t></textarea><button class="btn primary" style="margin-top:8px;width:100%;justify-content:center" data-go>${icon('search')}Analizuj</button>
           <div class="drop-hint" data-drop>Możesz też przeciągnąć plik tutaj</div>`;
         $('[data-file]', src).onclick = async () => { const f = (await api('dialog:files', 'Wybierz log', [{ name: 'Logi', extensions: ['log', 'txt', 'json', 'rpt', 'adm'] }, { name: 'Wszystkie', extensions: ['*'] }]))[0]; if (f) analyzeFile(out, f, {}, null); };
-        $('[data-go]', src).onclick = async () => { const t = $('[data-t]', src).value; if (!t.trim()) return; out.innerHTML = '<div class="progress indet"><i></i></div>'; renderResult(out, await api('analyzer:text', t), null); };
+        const goUrl = async () => { const u = $('[data-url]', src).value.trim(); if (!u) return; out.innerHTML = '<div class="panel"><p class="muted" style="margin-top:0">Pobieram log…</p><div class="progress indet"><i></i></div></div>'; try { const r = await App.apiQuiet('analyzer:url', u, {}); renderResult(out, r, null, r.file); } catch (e) { out.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; } };
+        $('[data-urlgo]', src).onclick = goUrl; $('[data-url]', src).onkeydown = e => { if (e.key === 'Enter') goUrl(); };
+        $('[data-go]', src).onclick = async () => { const t = $('[data-t]', src).value; if (!t.trim()) return; out.innerHTML = '<div class="progress indet"><i></i></div>'; renderResult(out, await api('analyzer:text', t), null, null); };
         const drop = $('[data-drop]', src);
         drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
         drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) analyzeFile(out, window.cm.pathForFile(f), {}, null); };
       }
     };
     $$('[data-kind]', el).forEach(b => b.onclick = () => { last.kind = b.dataset.kind; drawSrc(); });
+    // przeciągnięcie pliku albo linku w dowolne miejsce widoku
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dropping'); });
+    el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('dropping'); });
+    el.addEventListener('drop', async e => {
+      e.preventDefault(); el.classList.remove('dropping');
+      const f = e.dataTransfer.files[0];
+      const tgt = last.kind === 'game' && last.gameId ? { gameId: last.gameId, profileId: last.profileId } : last.kind === 'server' && last.serverId ? { serverId: last.serverId } : null;
+      if (f) { analyzeFile(out, window.cm.pathForFile(f), tgt && tgt.gameId === 'minecraft' ? tgt : {}, tgt); return; }
+      const url = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim();
+      if (/^https?:\/\//i.test(url)) { out.innerHTML = '<div class="progress indet"><i></i></div>'; try { const r = await App.apiQuiet('analyzer:url', url, tgt && tgt.gameId === 'minecraft' ? tgt : {}); renderResult(out, r, tgt, r.file); } catch (err) { out.innerHTML = `<div class="note warn">${esc(err.message)}</div>`; } }
+    });
     drawSrc();
   }
 

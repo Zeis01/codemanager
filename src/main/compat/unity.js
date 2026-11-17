@@ -79,7 +79,7 @@ function checkBepInEx(ctx) {
     for (const dep of p.deps) {
       const m = String(dep).match(/^(.+)-(\d+\.\d+\.\d+)$/);
       const depName = m ? m[1] : dep; const depVer = m ? m[2] : null;
-      if (BEPINEX_PACKS.test(depName)) { if (!bep.installed) rep.error(`${p.fullName} wymaga BepInEx`, { mod: p.folder }); continue; }
+      if (BEPINEX_PACKS.test(depName)) { if (!bep.installed) rep.error(`${p.fullName} wymaga BepInEx`, { mod: p.folder, action: { type: 'thunderstore', full: depName.replace(/-\d+\.\d+\.\d+$/, ''), label: 'Zainstaluj BepInEx' } }); continue; }
       const found = byName.get(depName.toLowerCase()) || byShort.get(depName.split('-').slice(1).join('-').toLowerCase());
       if (!found) rep.error(`${p.fullName} wymaga ${depName}${depVer ? ' ≥ ' + depVer : ''}`, { mod: p.folder, fix: 'Zainstaluj brakującą paczkę z Thunderstore.', action: { type: 'thunderstore', full: depName, label: `Zainstaluj ${depName}` } });
       else if (!found.enabled) rep.error(`${p.fullName} wymaga ${depName}, ale jest wyłączony`, { mod: p.folder, fix: 'Włącz zależność.' });

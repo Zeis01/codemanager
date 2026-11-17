@@ -50,7 +50,7 @@ function checkFiles(ctx) {
   }
   for (const r of ctx.nexusInstalls || []) {
     if (rep.mods.some(x => (r.paths || []).includes(x.file))) continue;
-    rep.addMod({ key: 'nexus-' + r.modId, name: r.name, version: r.version || '-', enabled: true, source: 'Nexus Mods (CodeManager)', files: r.paths });
+    rep.addMod({ key: 'nexus-' + r.modId, name: r.name, version: r.version || '-', enabled: true, source: r.local ? 'Archiwum (CodeManager)' : 'Nexus Mods (CodeManager)', files: r.paths });
   }
   rep.note('Dla tej gry CodeManager nie sprawdza zgodności modów – możesz je instalować, włączać i wyłączać ręcznie.', { detail: g.nexus ? 'Mody z Nexus Mods zainstalujesz w zakładce „Pobierz mody”.' : null });
   return rep.finish();

@@ -46,8 +46,14 @@ async function installArchive(archive, { game, target, gameRoot, log }) {
   try {
     await extract(archive, tmp, log);
     let root = tmp; while (onlyChild(root) && !hasMarker(root, game) && !hasRootDirs(root, game) && !U.isDir(path.join(root, 'Data')) && !U.isDir(path.join(root, 'BepInEx'))) root = onlyChild(root);
-    const out = [];
-    const copy = (src, dst) => { U.copyRecursive(src, dst); out.push(dst); };
+    const out = []; out.files = [];
+    // pełna lista plików (względem folderu gry) – do wykrywania konfliktów między modami
+    const rel = p => path.relative(gameRoot || target, p).split(path.sep).join('/');
+    const copy = (src, dst) => {
+      U.copyRecursive(src, dst); out.push(dst);
+      if (U.isDir(src)) for (const f of U.walk(src, { maxFiles: 50000 })) out.files.push(rel(path.join(dst, f)));
+      else out.files.push(rel(dst));
+    };
     const id = game.id;
     // Bethesda: Data
     if (game.checker === 'bethesda') {

@@ -16,6 +16,7 @@ class ServerManager {
     this.servers = U.readJSON(this.file, []);
     this.procs = new Map(); this.logs = new Map(); this.status = new Map(); this.stdinTarget = new Map();
     this.stopRequested = new Set(); this.crashes = new Map(); this.rconConns = new Map();
+    this.onLine = null; this.onEvent = null;
   }
   save() { U.writeJSON(this.file, this.servers); }
   get(id) { const s = this.servers.find(x => x.id === id); if (!s) throw new Error('Nie znaleziono serwera'); return s; }
@@ -34,6 +35,7 @@ class ServerManager {
       const clean = l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
       arr.push(clean); if (arr.length > 3000) arr.shift();
       this.emit('server:log', { id, line: clean });
+      if (this.onLine) { try { this.onLine(id, clean); } catch { /* */ } }
     }
   }
   setStatus(id, st) { this.status.set(id, st); this.emit('server:status', { id, status: st }); }
@@ -71,7 +73,7 @@ class ServerManager {
     if (U.isDir(server.path) && fs.readdirSync(server.path).length && !data.allowExisting) throw new Error('Folder docelowy nie jest pusty: ' + server.path);
     fs.mkdirSync(server.path, { recursive: true });
     this.servers.push(server); this.save();
-    if (!data.importOnly) this.install(server.id).catch(() => {});
+    if (!data.importOnly) this.install(server.id).then(() => (data.afterInstall ? data.afterInstall(server) : null)).catch(() => {});
     return server;
   }
   importExisting(data) { return this.create({ ...data, allowExisting: true, importOnly: true }); }
@@ -120,6 +122,7 @@ class ServerManager {
     const p = spawn(st.cmd, st.args, { cwd: st.cwd, env: { ...process.env, ...(st.env || {}) }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     this.procs.set(id, p); this.setStatus(id, 'running');
     s.lastStart = Date.now(); this.save();
+    if (this.onEvent) this.onEvent('start', s, {});
     p.stdout.on('data', d => this.log(id, String(d)));
     p.stderr.on('data', d => this.log(id, String(d)));
     p.on('error', e => { this.log(id, '✖ ' + e.message); });
@@ -129,6 +132,7 @@ class ServerManager {
       const rc = this.rconConns.get(id); if (rc) { rc.close(); this.rconConns.delete(id); }
       const wanted = this.stopRequested.has(id); this.stopRequested.delete(id);
       const sc = (this.servers.find(x => x.id === id) || {}).schedule || {};
+      if (this.onEvent) { const srv = this.servers.find(x => x.id === id); if (srv) this.onEvent(wanted ? 'stop' : 'crash', srv, { code, restart: !wanted && !!(sc.autoRestart && sc.autoRestart.enabled) }); }
       if (!wanted && sc.autoRestart && sc.autoRestart.enabled) {
         const hist = (this.crashes.get(id) || []).filter(t => Date.now() - t < 3600000); hist.push(Date.now()); this.crashes.set(id, hist);
         if (hist.length > (+sc.autoRestart.maxPerHour || 3)) { this.log(id, '✖ Serwer wyłącza się zbyt często – automatyczny restart wstrzymany. Sprawdź log w Analizatorze.'); return; }

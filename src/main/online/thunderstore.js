@@ -123,13 +123,13 @@ function moveToBackup(dir, ctx) {
 
 async function updateAll(ctx) {
   const inst = installedPackages(ctx.root);
-  const res = { updated: [], upToDate: 0, unknown: [] };
+  const res = { updated: [], upToDate: 0, unknown: [], available: [] };
   for (const p of inst.values()) {
     const { ns, name } = splitFull(p.full);
     try {
       const j = await info(ns, name);
       if (!j) { res.unknown.push(p.full); continue; }
-      if (U.cmpVer(j.latest.version_number, p.version) > 0) res.updated.push(...await install({ ns, name, version: j.latest.version_number }, ctx));
+      if (U.cmpVer(j.latest.version_number, p.version) > 0) { if (ctx.dryRun) res.available.push({ name: p.full, from: p.version, to: j.latest.version_number }); else res.updated.push(...await install({ ns, name, version: j.latest.version_number }, ctx)); }
       else res.upToDate++;
     } catch (e) { ctx.log && ctx.log('✖ ' + p.full + ': ' + e.message); }
   }

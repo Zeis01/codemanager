@@ -6,6 +6,7 @@
     { id: 'dashboard', label: 'Przegląd', icon: 'home' },
     { id: 'games', label: 'Znalezione gry', icon: 'games', count: () => { const d = App.state.detected; return d ? Object.values(d.games).filter(g => g.found).length : ''; } },
     { id: 'servers', label: 'Serwery', icon: 'server', count: () => { const r = App.state.servers.filter(s => s.status === 'running').length; return r ? { v: r + ' online', live: true } : (App.state.servers.length || ''); } },
+    { id: 'updates', label: 'Aktualizacje modów', icon: 'update', count: () => (App.state.modUpdates ? { v: String(App.state.modUpdates), live: true } : '') },
     { id: 'analyzer', label: 'Analizator błędów', icon: 'pulse' },
     { id: 'editor', label: 'Edytor', icon: 'code' },
     { id: 'rcon', label: 'RCON', icon: 'terminal' },
@@ -35,6 +36,8 @@
   App.renderRail = renderRail;
 
   App.go = function (id, params = {}) {
+    if (App.leaveGuard && !App.leaveGuard()) return;
+    App.leaveGuard = null;
     if (current === 'editor' && id !== 'editor' && App.views.editor.leave) App.views.editor.leave();
     current = id; currentParams = params;
     const main = $('#main');
@@ -106,6 +109,7 @@
     window.cm.on('themes:changed', files => { App.themeFiles = files; App.applyTheme(App.state.themeId); if (App.onThemesChanged) App.onThemesChanged(); });
     const [defs, cfg] = await Promise.all([api('games:defs'), api('config:get')]);
     App.state.defs = defs; App.state.settings = cfg.settings; App.state.gameConfig = cfg.games;
+    if (window.I18n) I18n.init(cfg.settings.language || 'pl');
     App.state.servers = await api('servers:list');
     window.cm.on('server:status', d => {
       const s = App.state.servers.find(x => x.id === d.id); if (s) s.status = d.status;
@@ -118,6 +122,12 @@
     window.cm.on('job:log', d => { if (App._nxm && d.jobId === App._nxmId) App._nxm.log(d.line); });
     window.cm.on('nxm:done', d => { if (App._nxm) App._nxm.done(d.ok ? `Zainstalowano ${d.name}.` : 'Nie udało się: ' + d.error, d.ok); App.state.reports = {}; });
     window.cm.on('server:progress', d => App.onServerProgress && App.onServerProgress(d));
+    window.cm.on('server:players', d => App.onServerPlayers && App.onServerPlayers(d));
+    window.cm.on('server:stats', d => App.onServerStats && App.onServerStats(d));
+    window.cm.on('server:chunky', d => App.onServerChunky && App.onServerChunky(d));
+    window.cm.on('nav:go', d => App.go(d.view, d.params || {}));
+    window.cm.on('games:playing', async () => { await App.mt.loadPlaytime(); if (['dashboard', 'games'].includes(current) && !document.querySelector('.modal-back')) App.refreshCurrent(); });
+    App.mt.loadPlaytime();
     // aktualizacje programu
     App.state.update = await window.cm.call('update:status').catch(() => null);
     window.cm.on('update:status', u => {
@@ -138,6 +148,6 @@
   }
   document.addEventListener('DOMContentLoaded', init);
   document.addEventListener('keydown', e => {
-    if (e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '8') { e.preventDefault(); App.go(NAV[+e.key - 1].id); }
+    if (e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9' && NAV[+e.key - 1]) { e.preventDefault(); App.go(NAV[+e.key - 1].id); }
   });
 })();
