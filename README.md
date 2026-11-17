@@ -1,14 +1,15 @@
 # CodeManager
 
-Menedżer modów, serwerów i edytor konfiguracji dla gier – w zielonym motywie „Sosnowy las”.
+Menedżer modów i serwerów ze sprawdzaniem zgodności modów za pomocą metadanych o dużej liczbie gier która jest stale rozszerzana.
 
 ## Uruchomienie
 
-Gotowa wersja: `CodeManager-Setup-x.y.z.exe` (instalator), `CodeManager-Portable-x.y.z.exe` albo `CodeManager-x.y.z-win-x64.zip` (rozpakuj i uruchom `CodeManager.exe`).
+- Wejdź do zakładki Releases
+- Pobierz i uruchom jedną z nich: `CodeManager-Setup-x.y.z.exe` (instalator), `CodeManager-Portable-x.y.z.exe` albo `CodeManager-x.y.z-win-x64.zip` (rozpakuj i uruchom `CodeManager.exe`).
 
 ## Co potrafi
 
-**Znalezione gry** – wykrywa gry z bibliotek Steam (libraryfolders.vdf + appmanifest), Epic Games, Rockstar Launcher, skanuje typowe foldery na dyskach oraz instancje Minecrafta z oficjalnego launchera, Prism/MultiMC, CurseForge, Modrinth App i ATLauncher. Złą lokalizację można zmienić lub uruchomić wykrywanie ponownie.
+Wykrywa gry z bibliotek Steam (libraryfolders.vdf + appmanifest), Epic Games, Rockstar Launcher, skanuje dysk w poszukiwaniu folderów z grami oraz instancje Minecrafta z oficjalnego launchera, Prism/MultiMC, CurseForge, Modrinth App i ATLauncher. Lokalizacje są wykrywane automatycznie, jeśli wykryło złą lokalizacje folderu można zmienić lub uruchomić wykrywanie ponownie.
 
 **Sprawdzanie zgodności modów** (offline, z metadanych modów):
 
@@ -16,10 +17,10 @@ Gotowa wersja: `CodeManager-Setup-x.y.z.exe` (instalator), `CodeManager-Portable
 |---|---|
 | Minecraft (Fabric, Quilt, Forge, NeoForge) | loader, wersja gry i loadera, zależności z zakresami wersji, `breaks`/`incompatible`, duplikaty, mody tylko-klient na serwerze, jar-in-jar; online: Modrinth (aktualizacje, oznaczenie wersji) |
 | Project Zomboid | `require`, `incompatible`, Build 41 vs 42, kolejność ładowania, duplikaty ID |
-| Euro Truck Simulator 2 | `compatible_versions` w manifest.sii / versions.sii vs wersja gry |
+| Euro Truck Simulator 2 | `compatible_versions` w manifest.sii / versions.sii i wersja gry |
 | Sons of the Forest | RedLoader, manifesty, zależności |
-| Lethal Company, R.E.P.O., Content Warning | BepInEx 5, zależności Thunderstore z wersjami, duplikaty DLL, log BepInEx, profile r2modman/Thunderstore App/Gale; online: aktualizacje z Thunderstore |
-| Schedule I | MelonLoader, mody IL2CPP vs Mono względem gałęzi gry, mody BepInEx w złym folderze |
+| Lethal Company, R.E.P.O., Content Warning | BepInEx 5, zależności Thunderstore z wersjami, duplikaty DLL, log BepInEx, profile r2modman/Thunderstore/Gale, aktualizacje z Thunderstore |
+| Schedule I | MelonLoader, mody IL2CPP vs Mono, mody BepInEx w złym folderze |
 | People Playground | `GameVersion`, brakujące skrypty, duplikaty |
 | Transport Fever 2 | mod.lua, nazwa folderu z wersją, nadpisywanie tych samych plików |
 | Hearts of Iron IV | `supported_version`, zależności, aktywne mody (dlc_load.json), konflikty plików |
@@ -28,13 +29,11 @@ Gotowa wersja: `CodeManager-Setup-x.y.z.exe` (instalator), `CodeManager-Portable
 | GTA V (Legacy i Enhanced) | ScriptHookV vs build gry, ASI Loader, ScriptHookVDotNet, OpenIV |
 | Terraria (tModLoader) | wersja tModLoadera w .tmod, `modReferences`, enabled.json |
 
-Pominięte celowo: **Brick Rigs** i **Ready or Not** – ich mody nie mają metadanych pozwalających rzetelnie sprawdzić zgodność.
-
 **Instalatory** – BepInEx 5, MelonLoader, RedLoader, Fabric, Quilt, Forge, NeoForge (z oficjalnych źródeł, z kopią zapasową nadpisywanych plików); tModLoader i Script Hook V przez oficjalne strony.
 
 **Serwery** – Minecraft (Paper, Purpur, Vanilla, Fabric, Quilt, Forge, NeoForge), Arma Reforger, Rust, CS2, DayZ, FiveM, MTA, Terraria (TShock), Valheim, Project Zomboid, Team Fortress 2, BeamMP. Instalacja przez SteamCMD lub oficjalne API, konsola na żywo z wysyłaniem poleceń, aktualizacje, frameworki pluginów (Oxide, Carbon, Metamod, CounterStrikeSharp, SourceMod, BepInExPack Valheim) i sprawdzanie zgodności pluginów/modów/zasobów.
 
-**Edytor** – Monaco (silnik VS Code): drzewo plików, zakładki, wyszukiwanie w plikach, szybkie otwieranie (Ctrl+P), podświetlanie Lua, JSON, TOML, YAML, XML, C#, SourcePawn, Enforce Script (DayZ/Reforger), SQF, Paradox, SII, KeyValues (gameinfo.gi), cfg serwerów, mcfunction i logów; snippety i szablony plików dla każdej gry.
+**Edytor** – Monaco: Edytuj pliki jak w Visual Studio Code.
 
 ## Nowe gry (1.4)
 
@@ -48,8 +47,6 @@ Gry oznaczone ★ mają najlepsze sprawdzanie zgodności (zależności, wersje, 
 | My Summer Car | MSCLoader, mody i biblioteki we właściwych folderach |
 | Teardown | info.txt, pliki startowe, duplikaty |
 | S.T.A.L.K.E.R.: SoC / CS / CoP | gamedata i ustawienie fsgame.ltx |
-
-**Instalacja ręczna** (bez sprawdzania zgodności – mody można instalować z Nexus Mods lub archiwum oraz włączać i wyłączać): S.T.A.L.K.E.R. 2, My Winter Car, Metro 2033 Redux, Metro: Last Light Redux, Metro Exodus, PAYDAY 3, Ready or Not, Brick Rigs, Cities: Skylines, Cities: Skylines II.
 
 ## Wygląd i motywy (1.3)
 
