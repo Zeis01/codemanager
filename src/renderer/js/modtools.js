@@ -264,6 +264,87 @@
     modal({ title: 'Porównanie profili', wide: true, body });
   };
 
+  // ---------- ostrzeżenia przed instalacją ----------
+  const warnOn = () => App.state.settings.warnBeforeInstall !== false;
+  function warnModal(title, html) {
+    return new Promise(res => { let ok = false; modal({ title, wide: true, body: html, onClose: () => res(ok), actions: [{ label: 'Anuluj' }, { label: 'Zainstaluj mimo to', primary: true, onClick: () => { ok = true; } }] }); });
+  }
+  mt.modrinthWarn = async (target, id, title) => {
+    if (!warnOn()) return true;
+    let r; try { r = await App.apiQuiet('precheck:modrinth', target, id); } catch { return true; }
+    const w = r.warnings || []; if (!w.length) return true;
+    if (w.every(x => x.level === 'info')) { toast(w.map(x => x.text).join(' ')); return true; }
+    return warnModal(`Uwaga przed instalacją: ${title}`, `<div class="issues">${w.map(x => `<div class="issue ${x.level === 'error' ? 'error' : 'info'}">${icon(x.level === 'error' ? 'error' : 'info', 'ic')}<div><div class="t">${esc(x.text)}</div></div></div>`).join('')}</div><p class="dim" style="font-size:12.5px">Ostrzeżenia możesz wyłączyć w Ustawieniach (Mody → Ostrzegaj przed konfliktami).</p>`);
+  };
+  const overlapHtml = list => `<p class="muted" style="margin-top:0">Te mody mają już pliki w miejscach, do których trafi nowy mod. Po instalacji zostaną nadpisane:</p><div class="issues">${list.map(o => `<div class="issue warn">${icon('alert', 'ic')}<div><div class="t">${o.archive ? esc(o.archive) + ' → ' : ''}${esc(o.mod)} <span class="dim">(${App.plural(o.count, 'plik', 'pliki', 'plików')})</span></div><div class="files">${o.files.map(esc).join('<br>')}</div></div></div>`).join('')}</div>`;
+  mt.archiveWarn = async (gameId, files) => {
+    if (!warnOn()) return true;
+    let r; try { r = await App.apiQuiet('precheck:archives', gameId, files); } catch { return true; }
+    return !r.length || warnModal('Mod nadpisze pliki innych modów', overlapHtml(r));
+  };
+  mt.nexusWarn = async (gameId, modId, fileId) => {
+    if (!warnOn()) return true;
+    let r; try { r = await App.apiQuiet('precheck:nexus', gameId, modId, fileId); } catch { return true; }
+    return !r.length || warnModal('Mod nadpisze pliki innych modów', overlapHtml(r));
+  };
+
+  // ---------- polecane mody ----------
+  mt.recommendBox = async (res, target, install) => {
+    const box = h('<div class="recommend"></div>'); res.parentNode.insertBefore(box, res);
+    let list; try { list = await App.apiQuiet('recommend:list', target); } catch { box.remove(); return; }
+    if (!list.length || !box.isConnected) { box.remove(); return; }
+    box.innerHTML = `<div class="section-title" style="margin-top:0"><h2>Polecane do Twoich modów</h2><span class="dim">na podstawie tego, co masz zainstalowane</span></div><div class="rec-grid"></div>`;
+    for (const m of list) {
+      const c = h(`<div class="rec">${m.icon ? `<img src="${esc(m.icon)}" alt="">` : `<div class="mcard-ph">${esc(m.title.slice(0, 1))}</div>`}<div style="flex:1;min-width:0"><div class="mcard-t">${esc(m.title)}</div><div class="dim" style="font-size:12px">${esc(m.why)}</div></div><button class="btn sm primary">${icon('download')}</button></div>`);
+      $('button', c).title = 'Zainstaluj';
+      $('button', c).onclick = async () => { const r = await install(m.id); if (r) c.remove(); };
+      c.querySelector('img, .mcard-ph').onclick = () => api('shell:external', m.url);
+      $('.rec-grid', box).appendChild(c);
+    }
+    const old = res.parentNode.querySelectorAll('.recommend'); if (old.length > 1) old[0].remove();
+  };
+
+  // ---------- paczki zasobów i shadery (Minecraft) ----------
+  mt.packsTab = async (c, ctx) => {
+    let d; try { d = await api('mcpacks:list', ctx.profileId); } catch { c.innerHTML = ''; return; }
+    c.innerHTML = `<div class="grid two" style="align-items:start">
+      <div class="panel"><div class="panel-head"><h2>Paczki zasobów</h2><button class="btn sm" data-add="pack">${icon('plus')}Dodaj</button><button class="btn sm" data-get="resourcepack">${icon('download')}Pobierz</button><button class="btn sm ghost icon" data-open="${esc(d.rpDir)}" title="Otwórz folder">${icon('folder')}</button></div>
+        ${d.optionsExists ? '' : '<div class="note warn" style="margin-bottom:10px">Nie ma jeszcze pliku options.txt – uruchom grę raz, żeby włączanie paczek zadziałało.</div>'}
+        <div data-packs></div><p class="dim" style="font-size:12px;margin:10px 0 0">Włączone paczki są na górze – wyżej znaczy ważniej. Zamknij grę przed zmianami (gra zapisuje ustawienia przy wyjściu).</p></div>
+      <div class="panel"><div class="panel-head"><h2>Shadery</h2><button class="btn sm" data-add="shader">${icon('plus')}Dodaj</button><button class="btn sm" data-get="shader">${icon('download')}Pobierz</button><button class="btn sm ghost icon" data-open="${esc(d.shDir)}" title="Otwórz folder">${icon('folder')}</button></div>
+        <p class="dim" style="font-size:12.5px;margin:0 0 10px">${d.shaderEngine === 'iris' ? 'Shadery obsługuje Iris (lub Oculus).' : d.shaderEngine === 'optifine' ? 'Shadery obsługuje OptiFine.' : 'Nie wykryto Iris ani OptiFine – do shaderów zainstaluj Iris (Fabric/NeoForge).'}</p>
+        <div data-shaders></div></div></div><div data-get-body style="margin-top:12px"></div>`;
+    const packs = $('[data-packs]', c); const sh = $('[data-shaders]', c);
+    packs.innerHTML = d.packs.length ? '' : '<p class="dim" style="font-size:13px">Brak paczek zasobów.</p>';
+    for (const p of d.packs) {
+      const row = h(`<div class="bk ${p.enabled ? '' : 'off'}"><label class="switch sm"><input type="checkbox" ${p.enabled ? 'checked' : ''}><span></span></label><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(p.name.replace(/\.zip$/i, ''))}</div><div class="dim" style="font-size:12px">${esc(p.description || '')}${p.format ? ` · format ${p.format}` : ''}</div></div>
+        ${p.enabled ? `<button class="btn sm ghost icon" data-mv="1" title="Wyżej">↑</button><button class="btn sm ghost icon" data-mv="-1" title="Niżej">↓</button>` : ''}<button class="btn sm ghost icon danger" data-del title="Do kosza">${icon('trash')}</button></div>`);
+      $('input', row).onchange = async e => { await api('mcpacks:toggle', ctx.profileId, p.name, e.target.checked); mt.packsTab(c, ctx); };
+      row.onclick = async e => {
+        const mv = e.target.closest('[data-mv]'); if (mv) { await api('mcpacks:move', ctx.profileId, p.name, +mv.dataset.mv); mt.packsTab(c, ctx); }
+        if (e.target.closest('[data-del]')) { await api('mcpacks:remove', ctx.profileId, p.path); toast('Przeniesiono do kosza (30 dni)'); mt.packsTab(c, ctx); }
+      };
+      packs.appendChild(row);
+    }
+    const none = h(`<label class="bk"><input type="radio" name="shader" ${d.activeShader ? '' : 'checked'}><div style="flex:1">Bez shaderów</div></label>`);
+    sh.appendChild(none); none.querySelector('input').onchange = async () => { await api('mcpacks:shader', ctx.profileId, null); toast('Shadery wyłączone'); };
+    for (const s2 of d.shaders) {
+      const row = h(`<label class="bk"><input type="radio" name="shader" ${s2.active ? 'checked' : ''}><div style="flex:1;min-width:0;font-size:13px;font-weight:600">${esc(s2.name.replace(/\.zip$/i, ''))}</div><button class="btn sm ghost icon danger" data-del title="Do kosza">${icon('trash')}</button></label>`);
+      $('input', row).onchange = async () => { await api('mcpacks:shader', ctx.profileId, s2.name); toast(`Aktywny shader: ${s2.name.replace(/\.zip$/i, '')}`); };
+      $('[data-del]', row).onclick = async e => { e.preventDefault(); await api('mcpacks:remove', ctx.profileId, s2.path); mt.packsTab(c, ctx); };
+      sh.appendChild(row);
+    }
+    if (!d.shaders.length) sh.appendChild(h('<p class="dim" style="font-size:13px;margin:6px 0 0">Brak shaderów w folderze shaderpacks.</p>'));
+    $$('[data-open]', c).forEach(b => b.onclick = async () => { await api('fs:mkdir', b.dataset.open); api('shell:open', b.dataset.open); });
+    $$('[data-add]', c).forEach(b => b.onclick = async () => { const f = await api('dialog:files', 'Wybierz paczki (.zip)', [{ name: 'Paczki', extensions: ['zip'] }]); if (!f.length) return; await api('mcpacks:add', ctx.profileId, b.dataset.add === 'shader' ? 'shader' : 'pack', f); mt.packsTab(c, ctx); });
+    $$('[data-get]', c).forEach(b => b.onclick = () => {
+      const kind = b.dataset.get; const box = $('[data-get-body]', c);
+      box.innerHTML = `<div class="panel"><h2 style="margin-bottom:10px">${kind === 'shader' ? 'Shadery' : 'Paczki zasobów'} z Modrinth</h2><div data-mr></div></div>`;
+      App.getModrinth($('[data-mr]', box), ctx, { gameId: 'minecraft', profileId: ctx.profileId }, { type: kind, mcVersion: ctx.prof && ctx.prof.mcVersion, installCh: (jobId, id) => window.cm.call('mcpacks:install', jobId, ctx.profileId, kind === 'shader' ? 'shader' : 'pack', id).then(r => { setTimeout(() => mt.packsTab(c, ctx), 300); return r; }) });
+      box.scrollIntoView({ behavior: 'smooth' });
+    });
+  };
+
   // ---------- pasek narzędzi w zakładce Mody ----------
   mt.toolsRow = (ctx, rep, refresh) => {
     const el = h(`<div class="toolsrow"><span class="dim">${icon('wrench')}Narzędzia</span>

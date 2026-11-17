@@ -123,8 +123,10 @@ function moveToBackup(dir, ctx) {
 
 async function updateAll(ctx) {
   const inst = installedPackages(ctx.root);
-  const res = { updated: [], upToDate: 0, unknown: [], available: [] };
+  const res = { updated: [], upToDate: 0, unknown: [], available: [], locked: [] };
+  const skip = new Set((ctx.skipFiles || []).map(f => path.resolve(f).toLowerCase()));
   for (const p of inst.values()) {
+    if (skip.has(path.resolve(p.dir).toLowerCase())) { res.locked.push(p.full); continue; }
     const { ns, name } = splitFull(p.full);
     try {
       const j = await info(ns, name);

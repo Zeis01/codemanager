@@ -99,7 +99,9 @@
       <div class="field"><label>Środek (X Z)</label><input class="input" data-cen value="0 0"></div>
       <div class="row"><button class="btn primary" data-go ${r.installed && r.running ? '' : 'disabled'}>${icon('play')}Start</button><button class="btn" data-c="pause">Pauza</button><button class="btn" data-c="continue">Wznów</button><button class="btn danger" data-c="cancel">Anuluj</button></div>
       ${r.running ? '' : '<p class="dim" style="font-size:12.5px">Uruchom serwer, aby zacząć.</p>'}</div>
-      <div class="panel"><h3 style="margin-bottom:10px">Postęp</h3><div data-prog></div></div></div>`;
+      <div class="panel"><h3 style="margin-bottom:10px">Postęp</h3><div data-prog></div></div></div>
+      <div class="panel" style="margin-top:12px" data-webmap></div>`;
+    st.webmap($('[data-webmap]', c), s);
     const prog = $('[data-prog]', c);
     const draw = p => {
       if (!p) { prog.innerHTML = '<p class="muted" style="font-size:13px">Nic nie jest generowane.</p>'; return; }
@@ -110,6 +112,26 @@
     const inst = $('[data-inst]', c); if (inst) inst.onclick = async () => { const x = await App.runJob('Instalacja Chunky', jobId => window.cm.call('chunky:install', jobId, s.id), { doneMsg: 'Zainstalowano. Zrestartuj serwer.' }); if (x) st.mapTab(c, s); };
     $('[data-go]', c).onclick = async () => { await api('chunky:start', s.id, { world: $('[data-w]', c).value, radius: $('[data-r]', c).value, shape: $('[data-sh]', c).value, center: $('[data-cen]', c).value }); toast('Generowanie rozpoczęte – postęp widać też w konsoli'); };
     $$('[data-c]', c).forEach(b => b.onclick = () => api('chunky:control', s.id, b.dataset.c).then(() => toast('Wysłano polecenie')));
+  };
+
+  // ---------- podgląd mapy: BlueMap / squaremap / Dynmap ----------
+  st.webmap = async (box, s) => {
+    const r = await api('webmap:status', s.id);
+    const m = r.map;
+    if (!m) {
+      box.innerHTML = `<h2 style="margin-bottom:6px">Podgląd mapy świata</h2><p class="muted" style="font-size:13px;margin:0 0 12px">Mapa w przeglądarce, na której widać teren i graczy. Zainstaluj jeden z modów/pluginów – CodeManager pokaże mapę tutaj.</p>
+        <div class="grid two"><div class="tpl" style="cursor:default"><b>BlueMap</b><span class="muted">Mapa 3D z prawdziwymi teksturami. Wymaga zgody na pobranie plików gry od Mojang (do tekstur). Paper, Fabric, NeoForge, Forge.</span><button class="btn sm primary" data-inst="bluemap">${icon('download')}Zainstaluj BlueMap</button></div>
+        <div class="tpl" style="cursor:default"><b>squaremap</b><span class="muted">Lekka mapa 2D z góry, szybko się generuje. Paper i Fabric.</span><button class="btn sm primary" data-inst="squaremap" ${['paper', 'purpur', 'fabric'].includes(r.variant) ? '' : 'disabled title="Niedostępny dla tego silnika"'}>${icon('download')}Zainstaluj squaremap</button></div></div>`;
+      $$('[data-inst]', box).forEach(b => b.onclick = async () => { const x = await App.runJob(`Instalacja: ${b.dataset.inst}`, jobId => window.cm.call('webmap:install', jobId, s.id, b.dataset.inst), { doneMsg: 'Zainstalowano. Zrestartuj serwer, aby mapa się uruchomiła.' }); if (x) st.webmap(box, s); });
+      return;
+    }
+    const url = `http://127.0.0.1:${m.port}/`;
+    box.innerHTML = `<div class="panel-head"><h2>Podgląd mapy – ${esc(m.name)}</h2><span class="dim mono" style="font-size:12px">${esc(url)}</span><button class="btn sm" data-ext>${icon('globe')}Otwórz w przeglądarce</button><button class="btn sm ghost" data-re>${icon('refresh')}</button></div>
+      ${m.kind === 'bluemap' && !m.accepted ? `<div class="note warn" style="margin-bottom:10px">${m.configured ? 'BlueMap czeka na zgodę na pobranie plików Minecrafta od Mojang (potrzebne do tekstur mapy). Klikając, akceptujesz warunki Mojang dotyczące tych plików.' : 'Uruchom serwer raz, aby BlueMap utworzył konfigurację.'} ${m.configured ? `<button class="btn sm primary" data-accept style="margin-left:8px">Zgadzam się i włącz mapę</button>` : ''}</div>` : ''}
+      ${r.running ? `<iframe class="webmap" src="${esc(url)}" title="Mapa świata"></iframe><p class="dim" style="font-size:12px;margin:8px 0 0">Jeśli mapa jest pusta, poczekaj chwilę – pierwsze renderowanie świata trwa. Znajomym możesz udostępnić port ${m.port} (zakładka Sieć).</p>` : '<p class="muted" style="font-size:13px">Uruchom serwer, aby zobaczyć mapę.</p>'}`;
+    $('[data-ext]', box).onclick = () => api('shell:external', url);
+    $('[data-re]', box).onclick = () => st.webmap(box, s);
+    const ac = $('[data-accept]', box); if (ac) ac.onclick = async () => { await api('webmap:accept', s.id); toast('Zgoda zapisana. Zrestartuj serwer, aby BlueMap zaczął rysować mapę.'); st.webmap(box, s); };
   };
 
   // ---------- synchronizacja z graczem ----------

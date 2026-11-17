@@ -144,7 +144,18 @@ function readFromZip(zip, fileName, depth = 0) {
   return result;
 }
 
+// pamięć podręczna: plik jest czytany ponownie tylko, gdy zmienił się jego rozmiar lub data modyfikacji
+const jarCache = new Map();
 function readJar(file) {
+  let st = null; try { st = require('fs').statSync(file); } catch { /* */ }
+  const key = st ? `${st.size}:${st.mtimeMs}` : null;
+  const c = jarCache.get(file);
+  if (c && key && c.key === key) return structuredClone(c.data);
+  const data = readJarRaw(file);
+  if (key) { jarCache.set(file, { key, data: structuredClone(data) }); if (jarCache.size > 5000) jarCache.delete(jarCache.keys().next().value); }
+  return data;
+}
+function readJarRaw(file) {
   try {
     const zip = new AdmZip(file);
     return readFromZip(zip, require('path').basename(file));

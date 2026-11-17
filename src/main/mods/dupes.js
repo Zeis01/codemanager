@@ -14,8 +14,13 @@ function baseName(name) {
   s = s.replace(/[^a-z0-9]+/g, ' ').trim();
   return s;
 }
+const hashCache = new Map();
 function fileHash(f) {
-  try { const st = fs.statSync(f); if (!st.isFile() || st.size > 300 * 1024 * 1024) return null; return crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex'); } catch { return null; }
+  try {
+    const st = fs.statSync(f); if (!st.isFile() || st.size > 300 * 1024 * 1024) return null;
+    const key = `${st.size}:${st.mtimeMs}`; const c = hashCache.get(f); if (c && c.key === key) return c.h;
+    const h = crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex'); hashCache.set(f, { key, h }); return h;
+  } catch { return null; }
 }
 const mtime = f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
 

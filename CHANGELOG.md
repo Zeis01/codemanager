@@ -1,5 +1,31 @@
 # Historia zmian
 
+## CodeManager 1.6.0
+
+### Szybkość
+- **Osobne wątki:** sprawdzanie zgodności modów, wykrywanie gier, wyszukiwanie w plikach edytora, analiza śladu błędu, synchronizacja z graczem i liczenie rozmiaru migawek działają w wątkach roboczych. Okno nie przycina się podczas wczytywania modów ani po instalacji.
+- **Pamięć podręczna plików .jar i sum kontrolnych:** kolejne sprawdzenie czyta tylko nowe lub zmienione mody.
+- Wywołania obsługiwane wcześniej synchronicznie w procesie głównym są teraz asynchroniczne. Jeśli wątek roboczy nie wystartuje, program wykonuje pracę po staremu, więc działa dalej.
+
+### Mody
+- **Blokada wersji:** przycisk kluczyka przy modzie. Zablokowany mod jest pomijany przy „Aktualizuj wszystko” i w widoku „Aktualizacje modów” (Modrinth, Thunderstore, Nexus Mods).
+- **Kolekcje z tagów:** przycisk „Z tagu…” na pasku profili. Kolekcja włącza mody oznaczone wybranym tagiem i przy każdym przełączeniu liczy zestaw od nowa.
+- **Polecane mody:** w zakładce „Pobierz mody” (Minecraft i serwery) pojawiają się propozycje pasujące do zainstalowanych modów. Program sprawdza zgodność z wersją gry i loaderem.
+- **Ostrzeżenie przed instalacją** (do wyłączenia w Ustawieniach):
+  - mody z Modrinth: niezgodności deklarowane przez nowy lub zainstalowany mod oraz zastąpienie istniejącej wersji;
+  - archiwa i pliki z Nexus Mods: lista plików innych modów, które zostaną nadpisane.
+- **Paczki zasobów i shadery Minecrafta:** nowa zakładka „Zasoby i shadery”:
+  - włączanie paczek i ustawianie ich kolejności (options.txt);
+  - wybór shadera dla Iris/Oculus albo OptiFine;
+  - dodawanie z pliku i pobieranie z Modrinth.
+
+### Serwery
+- **Alarm zasobów:** powiadomienie w Windows i na Discordzie, gdy serwer przez zadany czas przekracza limit procesora lub pamięci. Limity ustawiasz w zakładce Ustawienia serwera.
+- **Podgląd mapy świata w zakładce „Mapa”:** instalacja BlueMap lub squaremap jednym kliknięciem (wykrywany jest też Dynmap) i mapa wyświetlana w programie. Dla BlueMap jest przycisk zgody na pobranie plików Mojang.
+
+### Wygląd
+- **Edytor motywów** z podglądem na żywo. Każdy kolor ustawisz próbnikiem albo kodem, do tego motyw bazowy i zaokrąglenie rogów. Gotowy motyw zapisujesz jako plik w folderze motywów.
+
 ## CodeManager 1.5.0
 
 ### Mody

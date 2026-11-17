@@ -29,6 +29,14 @@ function emit(ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch
 
 const servers = new ServerManager({ userData, getSettings: () => config.settings, emit });
 
+// Wątki robocze: sprawdzanie modów, wykrywanie gier i wyszukiwanie nie blokują okna
+const { Pool } = require('./worker/pool');
+const pool = new Pool({ size: Math.min(3, Math.max(1, require('os').cpus().length - 1)) });
+const work = (op, args, fallback) => pool.run(op, args, fallback);
+const detectCfg = () => ({ settings: config.settings, games: config.games });
+const runDetect = () => work('detect', { config: detectCfg() }, () => detect.detectAll(config));
+function checkGame(id, info, prof, settings) { return work('check', { gameId: id, info, profile: prof, settings }, () => compat.check(id, info, prof, settings)); }
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1100, minHeight: 680, frame: false, backgroundColor: '#0a120d', show: false,
@@ -55,7 +63,7 @@ app.on('second-instance', (_e, argv) => { const u = argv.find(a => /^nxm:\/\//i.
 app.on('open-url', (e, u) => { e.preventDefault(); if (/^nxm:/i.test(u)) handleNxm(u); });
 app.whenReady().then(() => { createWindow(); const u = process.argv.find(a => /^nxm:\/\//i.test(a)); if (u) setTimeout(() => handleNxm(u), 3000); });
 app.on('window-all-closed', () => { if (config.settings.tray && tray && !app.isQuitting) return; servers.stopAll(); rcon.closeAll(); app.quit(); });
-app.on('before-quit', () => { app.isQuitting = true; servers.stopAll(); try { rcon.closeAll(); } catch { /* */ } });
+app.on('before-quit', () => { app.isQuitting = true; try { pool.close(); } catch { /* */ } servers.stopAll(); try { rcon.closeAll(); } catch { /* */ } });
 
 // ---------- bezpieczne opakowanie handlerów ----------
 function handle(ch, fn) {
@@ -77,33 +85,33 @@ handle('settings:set', s => { config.settings = { ...config.settings, ...s }; sa
 
 // Gry
 handle('games:defs', () => ({ games: GAMES.map(g => ({ ...g, epic: undefined })), unsupported: UNSUPPORTED }));
-handle('games:detect', async () => { detected = await detect.detectAll(config); saveConfig(); return detected; });
-handle('games:detected', async () => { if (!detected) detected = await detect.detectAll(config); return detected; });
+handle('games:detect', async () => { detected = await runDetect(); saveConfig(); return detected; });
+handle('games:detected', async () => { if (!detected) detected = await runDetect(); return detected; });
 handle('games:setPath', async (id, p) => {
   if (!U.isDir(p)) throw new Error('Folder nie istnieje');
   config.games[id] = { ...(config.games[id] || {}), path: p, manual: true }; saveConfig();
-  detected = await detect.detectAll(config); saveConfig();
+  detected = await runDetect(); saveConfig();
   return detected.games[id];
 });
-handle('games:resetPath', async id => { if (config.games[id]) { delete config.games[id].manual; delete config.games[id].path; } detected = await detect.detectAll(config); saveConfig(); return detected.games[id]; });
+handle('games:resetPath', async id => { if (config.games[id]) { delete config.games[id].manual; delete config.games[id].path; } detected = await runDetect(); saveConfig(); return detected.games[id]; });
 handle('games:settings', (id, s) => { config.games[id] = { ...(config.games[id] || {}), settings: { ...((config.games[id] || {}).settings || {}), ...s } }; saveConfig(); return config.games[id].settings; });
 handle('mc:addInstance', async (p, name) => {
   if (!U.isDir(p)) throw new Error('Folder nie istnieje');
   const g = config.games.minecraft = config.games.minecraft || {};
   g.manualInstances = g.manualInstances || [];
   if (!g.manualInstances.find(i => i.path === p)) g.manualInstances.push({ id: 'manual-' + Date.now().toString(36), name: name || ('Ręcznie: ' + path.basename(p)), path: p, launcher: 'Ręcznie' });
-  detected = await detect.detectAll(config); saveConfig(); return detected.games.minecraft;
+  detected = await runDetect(); saveConfig(); return detected.games.minecraft;
 });
 handle('mc:setInstance', async (instId, patch) => {
   const g = config.games.minecraft = config.games.minecraft || {};
   g.instanceOverrides = g.instanceOverrides || {};
   g.instanceOverrides[instId] = { ...(g.instanceOverrides[instId] || {}), ...patch };
-  detected = await detect.detectAll(config); saveConfig(); return detected.games.minecraft;
+  detected = await runDetect(); saveConfig(); return detected.games.minecraft;
 });
 handle('mc:removeInstance', async instId => {
   const g = config.games.minecraft || {};
   g.manualInstances = (g.manualInstances || []).filter(i => i.id !== instId);
-  detected = await detect.detectAll(config); saveConfig(); return detected.games.minecraft;
+  detected = await runDetect(); saveConfig(); return detected.games.minecraft;
 });
 
 function infoFor(id) { if (!detected || !detected.games[id]) throw new Error('Najpierw uruchom wykrywanie gier'); return detected.games[id]; }
@@ -111,7 +119,7 @@ handle('mods:profiles', id => compat.profiles(id, infoFor(id)));
 handle('mods:check', (id, profileId) => {
   const info = infoFor(id);
   const prof = compat.profiles(id, info).find(p => p.id === profileId);
-  return compat.check(id, info, prof, { ...((config.games[id] || {}).settings || {}), __nexus: nexusRegFor(id) });
+  return checkGame(id, info, prof, { ...((config.games[id] || {}).settings || {}), __nexus: nexusRegFor(id) });
 });
 handle('mods:online', (id, profileId) => {
   const info = infoFor(id);
@@ -146,7 +154,7 @@ handle('loaders:install', async (jobId, id, opts) => {
     java = pick.java.path; log(`Java: ${pick.java.raw} (${java})`);
   }
   const r = await installers.install(id, { ...opts, java, userData }, log, progress);
-  if (detected) { detected = await detect.detectAll(config); saveConfig(); }
+  if (detected) { detected = await runDetect(); saveConfig(); }
   return r;
 });
 handle('java:list', () => N.findJavas(config.settings.javaPath));
@@ -171,7 +179,7 @@ handle('servers:configs', id => servers.configs(id));
 handle('servers:content', id => servers.contentDir(id));
 handle('servers:frameworks', id => servers.frameworks(id));
 handle('servers:installFramework', (id, fw) => servers.installFramework(id, fw));
-handle('servers:check', id => servers.check(id));
+handle('servers:check', id => work('serverCheck', { server: servers.get(id) }, () => servers.check(id)));
 handle('servers:online', id => servers.online(id));
 handle('servers:workshop', (id, item) => servers.workshopAdd(id, item));
 handle('servers:toggle', mod => compat.toggle(mod));
@@ -193,20 +201,8 @@ handle('fs:mkdir', p => { fs.mkdirSync(p, { recursive: true }); return true; });
 handle('fs:rename', (a, b) => { fs.renameSync(a, b); return b; });
 handle('fs:trash', async p => { await shell.trashItem(p); return true; });
 handle('fs:exists', p => U.exists(p));
-handle('fs:search', (root, q) => {
-  const ql = q.toLowerCase();
-  return U.walk(root, { maxFiles: 30000, filter: r => !/(^|\/)(node_modules|\.git|steamapps|Cache|cache)\//.test(r) }).filter(r => r.toLowerCase().includes(ql)).slice(0, 200).map(r => ({ rel: r, path: path.join(root, r) }));
-});
-handle('fs:grep', (root, q) => {
-  const out = []; const ql = q.toLowerCase();
-  for (const r of U.walk(root, { maxFiles: 8000, filter: f => /\.(lua|json|cfg|ini|txt|cs|sp|inc|xml|yml|yaml|toml|js|ts|properties|sqf|cpp|hpp|c|h|sii|gi|mcfunction|conf|md)$/i.test(f) })) {
-    const full = path.join(root, r); let t; try { if (fs.statSync(full).size > 2e6) continue; t = fs.readFileSync(full, 'utf8'); } catch { continue; }
-    const lines = t.split(/\r?\n/);
-    lines.forEach((l, i) => { if (out.length < 500 && l.toLowerCase().includes(ql)) out.push({ rel: r, path: full, line: i + 1, text: l.trim().slice(0, 200) }); });
-    if (out.length >= 500) break;
-  }
-  return out;
-});
+handle('fs:search', (root, q) => work('search', { root, q }));
+handle('fs:grep', (root, q) => work('grep', { root, q }));
 
 // Okna dialogowe / powłoka
 handle('dialog:folder', async (title, def) => { const r = await dialog.showOpenDialog(win, { title: title || 'Wybierz folder', defaultPath: def, properties: ['openDirectory', 'createDirectory'] }); return r.canceled ? null : r.filePaths[0]; });
@@ -293,9 +289,15 @@ handle('modrinth:install', async (jobId, target, projectId, versionId) => {
 });
 
 // ---------- aktualizacja jednym przyciskiem ----------
+async function lockedFiles(gameId, profileId) {
+  const keys = new Set(notes.locked(gameId)); if (!keys.size) return [];
+  try { return (await gameReport(gameId, profileId)).mods.filter(m => m.file && keys.has(normKey(m))).map(m => m.file); } catch { return []; }
+}
 async function updRun(jobId, target) {
   const log = jobLog(jobId), progress = jobProg(jobId);
   if (target.gameId && !target.__noSnap) await autoSnapshot(target.gameId, target.profileId, 'przed aktualizacją modów');
+  const skipFiles = target.gameId ? await lockedFiles(target.gameId, target.profileId) : [];
+  if (skipFiles.length) log(`Pomijam zablokowane mody: ${skipFiles.map(f => path.basename(f)).join(', ')}`);
   if (target.serverId) {
     const ctx = serverCtx(target.serverId);
     if (ctx.modsDir) return { kind: 'modrinth', ...(await modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, progress, backupRoot })) };
@@ -303,10 +305,10 @@ async function updRun(jobId, target) {
     throw new Error('Automatyczna aktualizacja nie jest dostępna dla tego serwera.');
   }
   const g = gameDef(target.gameId); const ctx = profileCtx(target.gameId, target.profileId);
-  if (g.checker === 'minecraft') return { kind: 'modrinth', ...(await modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, progress, backupRoot })) };
-  if (g.checker === 'bepinex') return { kind: 'thunderstore', ...(await thunder.updateAll({ root: ctx.root, log, progress, backupRoot })) };
+  if (g.checker === 'minecraft') return { kind: 'modrinth', ...(await modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, progress, backupRoot, skipFiles })) };
+  if (g.checker === 'bepinex') return { kind: 'thunderstore', ...(await thunder.updateAll({ root: ctx.root, log, progress, backupRoot, skipFiles })) };
   if (g.checker === 'factorio') { const gi = U.readJSON(path.join(ctx.info.path, 'data', 'base', 'info.json'), {}); return { kind: 'list', items: await G2.factorioUpdates(ctx.info.path, gi.version, { download: true, log, progress }) }; }
-  if (nexus.DOMAINS[g.id]) return { kind: 'list', items: await nexusUpdates(g.id, ctx, log) };
+  if (nexus.DOMAINS[g.id]) return { kind: 'list', items: await nexusUpdates(g.id, ctx, log, skipFiles) };
   throw new Error('Ta gra nie ma serwisu z aktualizacjami modów.');
 }
 handle('updates:run', updRun);
@@ -363,10 +365,11 @@ async function handleNxm(url) {
     emit('nxm:done', { jobId, ok: true, name: r.name });
   } catch (e) { emit('job:log', { jobId, line: '✖ ' + e.message }); emit('nxm:done', { jobId, ok: false, error: e.message }); }
 }
-async function nexusUpdates(gameId, ctx, log) {
+async function nexusUpdates(gameId, ctx, log, skipFiles = []) {
   const domain = nexus.DOMAINS[gameId];
   const out = [];
-  const entries = nexusReg.forGame(gameId).filter(e => !e.local).map(e => ({ modId: e.modId, version: e.version, name: e.name, src: 'CodeManager' }));
+  const skip = new Set(skipFiles.map(f => path.resolve(f).toLowerCase()));
+  const entries = nexusReg.forGame(gameId).filter(e => !e.local && !(e.paths || []).some(p => skip.has(path.resolve(p).toLowerCase()))).map(e => ({ modId: e.modId, version: e.version, name: e.name, src: 'CodeManager' }));
   if (gameId === 'stardew') {
     for (const x of G2.readManifests(path.join(ctx.info.path, 'Mods'))) {
       const k = ((x.man || {}).UpdateKeys || []).map(u => String(u).match(/^Nexus:(\d+)/i)).find(Boolean);
@@ -406,7 +409,7 @@ handle('import:mrpack', async (jobId, file, targetDir, opts = {}) => {
   g.manualInstances = (g.manualInstances || []).filter(i => i.path !== dir);
   const inst = { id: 'manual-' + Date.now().toString(36), name: `Paczka: ${pack.name}`, path: dir, launcher: 'Ręcznie', mcVersion: r.mcVersion, loader: r.loader, loaderVersion: r.loaderVersion };
   g.manualInstances.push(inst);
-  detected = await detect.detectAll(config); saveConfig();
+  detected = await runDetect(); saveConfig();
   if (opts.installLoader && r.loader !== 'vanilla') {
     jobLog(jobId)(`Instalacja loadera ${r.loader} ${r.mcVersion}…`);
     const need = require('./compat/minecraft').requiredJava(r.mcVersion);
@@ -499,7 +502,7 @@ handle('analyzer:analyze', async (file, ctx = {}) => {
   let modsDir = null;
   if (ctx.gameId === 'minecraft') modsDir = profileCtx('minecraft', ctx.profileId).modsDir;
   if (ctx.serverId) { const s = servers.get(ctx.serverId); if (s.type === 'minecraft') modsDir = path.join(s.path, ['paper', 'purpur'].includes(s.variant) ? 'plugins' : 'mods'); }
-  const pkgIndex = modsDir ? analyzer.buildPackageIndex(modsDir) : [];
+  const pkgIndex = modsDir ? await work('pkgIndex', { modsDir }, () => analyzer.buildPackageIndex(modsDir)) : [];
   const r = analyzer.analyzeText(text, { pkgIndex });
   return { ...r, headline: analyzer.headline(r.findings), file, size: text.length };
 });
@@ -514,6 +517,9 @@ handle('profiles:rename', (gameId, scope, id, name) => profiles.rename(gameId, s
 handle('profiles:remove', (gameId, scope, id) => profiles.remove(gameId, scope, id));
 handle('profiles:apply', async (gameId, scope, id, mods) => {
   if (!gameId.startsWith('srv:')) await autoSnapshot(gameId, scope === 'game' ? null : scope, 'przed zmianą profilu');
+  // kolekcja z tagu: zestaw liczony od nowa z bieżących tagów
+  const tp = profiles.list(gameId, scope).profiles.find(x => x.id === id);
+  if (tp && tp.tag) { const keys = new Set(notes.withTag(gameId, tp.tag)); profiles.update(gameId, scope, id, mods.map(m => ({ ...m, enabled: m.toggleable && keys.has(normKey(m)) }))); }
   const plan = profiles.plan(gameId, scope, id, mods);
   const ctx = { gameId, gamePath: gameId.startsWith('srv:') ? null : (detected && detected.games[gameId] ? detected.games[gameId].path : null) };
   let n = 0; const errors = [];
@@ -579,7 +585,7 @@ const { Icons } = require('./icons');
 let steamRootsCache = [];
 const icons = new Icons({ app, userData, getSteamRoots: () => steamRootsCache });
 handle('icons:all', async () => {
-  try { steamRootsCache = (await detect.steamApps(config.settings.steamPath)).roots || []; } catch { steamRootsCache = []; }
+  try { steamRootsCache = await work('steamRoots', { steamPath: config.settings.steamPath }); } catch { steamRootsCache = []; }
   const online = config.settings.onlineIcons !== false;
   const games = {};
   for (const g of GAMES) {
@@ -599,7 +605,7 @@ const loadorder = require('./mods/loadorder');
 const { Snapshots } = require('./mods/snapshots');
 const share = require('./mods/share');
 const dupes = require('./mods/dupes');
-const { Notes, Trash } = require('./mods/store');
+const { Notes, Trash, normKey } = require('./mods/store');
 const bisect = require('./mods/bisect');
 const sync = require('./servers/sync');
 const { Monitor, ACTIONS: PLAYER_ACTIONS, ACTION_LABELS, isChat } = require('./servers/monitor');
@@ -611,8 +617,9 @@ const launch = require('./games/launch');
 const saves = require('./games/saves');
 const reportTxt = require('./report');
 
-const snapshots = new Snapshots(path.join(userData, 'snapshots'));
-const saveBackups = new Snapshots(path.join(userData, 'backups', 'saves'));
+const dirSize = paths => work('dirSize', { paths });
+const snapshots = new Snapshots(path.join(userData, 'snapshots'), { sizeFn: dirSize });
+const saveBackups = new Snapshots(path.join(userData, 'backups', 'saves'), { sizeFn: dirSize });
 const notes = new Notes(path.join(userData, 'mod-notes.json'));
 const trash = new Trash(path.join(userData, 'trash'), 30);
 const bisects = new bisect.BisectStore(path.join(userData, 'bisect.json'));
@@ -706,17 +713,17 @@ handle('servers:createFromTemplate', (tplId, data) => {
 });
 
 // ---------- synchronizacja klient–serwer ----------
-function syncCompare(serverId, target) {
+async function syncCompare(serverId, target) {
   const s = servers.get(serverId);
   if (s.type === 'minecraft') {
     const ctx = profileCtx('minecraft', target.profileId);
-    return { kind: 'minecraft', server: s.name, client: ctx.prof && ctx.prof.name, clientDir: ctx.modsDir, inner: 'mods', ...sync.compareMinecraft(path.join(s.path, 'mods'), ctx.modsDir) };
+    return { kind: 'minecraft', server: s.name, client: ctx.prof && ctx.prof.name, clientDir: ctx.modsDir, inner: 'mods', ...(await work('syncMinecraft', { serverDir: path.join(s.path, 'mods'), clientDir: ctx.modsDir })) };
   }
   if (s.type === 'valheim') {
     const g = GAMES.find(x => x.id === 'valheim'); const det = detected && detected.games.valheim;
     const root = target.path || (det && det.found ? det.path : null);
     if (!root) throw new Error('Nie wykryto Valheima na tym komputerze – wskaż folder gry.');
-    return { kind: 'valheim', server: s.name, client: g ? g.name : 'Valheim', clientDir: path.join(root, 'BepInEx', 'plugins'), inner: 'BepInEx/plugins', ...sync.compareThunderstore(s.path, root) };
+    return { kind: 'valheim', server: s.name, client: g ? g.name : 'Valheim', clientDir: path.join(root, 'BepInEx', 'plugins'), inner: 'BepInEx/plugins', ...(await work('syncThunder', { serverRoot: s.path, clientRoot: root })) };
   }
   if (s.type === 'projectzomboid') {
     const info = detected && detected.games.projectzomboid;
@@ -728,15 +735,15 @@ function syncCompare(serverId, target) {
   throw new Error('Synchronizacja jest dostępna dla serwerów Minecraft (mody), Valheim i Project Zomboid.');
 }
 handle('sync:compare', (serverId, target) => syncCompare(serverId, target || {}));
-handle('sync:install', (serverId, target) => {
-  const r = syncCompare(serverId, target || {});
+handle('sync:install', async (serverId, target) => {
+  const r = await syncCompare(serverId, target || {});
   if (r.kind === 'projectzomboid') throw new Error('Mody Project Zomboid pobierze Steam przy dołączaniu do serwera.');
   const items = [...r.missing, ...r.mismatch];
   if (!items.length) return { installed: [] };
   return { installed: sync.installInto(items, r.clientDir, path.join(userData, 'backups', 'sync', new Date().toISOString().replace(/[:.]/g, '-'))) };
 });
 handle('sync:pack', async (serverId, target) => {
-  const r = syncCompare(serverId, target || {});
+  const r = await syncCompare(serverId, target || {});
   const items = r.kind === 'projectzomboid' ? [] : [...r.missing, ...r.mismatch];
   if (!items.length) throw new Error('Gracz ma już wszystkie mody z serwera.');
   const out = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), `${U.safeName(r.server)}-mody.zip`), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
@@ -746,17 +753,17 @@ handle('sync:pack', async (serverId, target) => {
 
 // ---------- konflikty, kolejność ładowania, duplikaty ----------
 function localRegistry(gameId) { return nexusReg.forGame(gameId); }
-handle('mods:conflicts', (gameId, profileId) => {
+handle('mods:conflicts', async (gameId, profileId) => {
   const ctx = profileCtx(gameId, profileId);
-  const rep = compat.check(gameId, ctx.info, ctx.prof, { ...((config.games[gameId] || {}).settings || {}), __nexus: nexusRegFor(gameId) });
-  return conflicts.forGame(gameDef(gameId), rep.mods, localRegistry(gameId));
+  const rep = await gameReport(gameId, profileId);
+  return work('conflicts', { game: gameDef(gameId), mods: rep.mods, registry: localRegistry(gameId) });
 });
 handle('loadorder:get', gameId => { const g = gameDef(gameId); if (!loadorder.supported(g)) return null; return loadorder.get(g, infoFor(gameId)); });
 handle('loadorder:sort', (gameId, items) => loadorder.autoSort(gameDef(gameId), items));
 handle('loadorder:check', (gameId, items) => loadorder.problems(gameDef(gameId), items));
 handle('loadorder:save', async (gameId, items) => { const g = gameDef(gameId); await autoSnapshot(gameId, null, 'przed zmianą kolejności'); return loadorder.save(g, items); });
-handle('mods:dupes', (gameId, profileId) => { const rep = gameReport(gameId, profileId); return dupes.find(rep.mods); });
-function gameReport(gameId, profileId) { const ctx = profileCtx(gameId, profileId); return compat.check(gameId, ctx.info, ctx.prof, { ...((config.games[gameId] || {}).settings || {}), __nexus: nexusRegFor(gameId) }); }
+handle('mods:dupes', async (gameId, profileId) => { const rep = await gameReport(gameId, profileId); return work('dupes', { mods: rep.mods }); });
+function gameReport(gameId, profileId) { const ctx = profileCtx(gameId, profileId); return checkGame(gameId, ctx.info, ctx.prof, { ...((config.games[gameId] || {}).settings || {}), __nexus: nexusRegFor(gameId) }); }
 
 // ---------- migawki ----------
 const snapKeep = () => Math.max(2, +config.settings.snapshotKeep || 10);
@@ -776,24 +783,24 @@ function shareExtra(gameId, ctx) {
   if (g.checker === 'bepinex') { extra.thunder = new Map(); for (const p of thunder.installedPackages(ctx.root).values()) extra.thunder.set(path.resolve(p.dir).toLowerCase(), `${p.full}-${p.version}`); }
   return extra;
 }
-handle('share:export', (gameId, profileId, name) => {
-  const ctx = profileCtx(gameId, profileId); const rep = gameReport(gameId, profileId);
+handle('share:export', async (gameId, profileId, name) => {
+  const ctx = profileCtx(gameId, profileId); const rep = await gameReport(gameId, profileId);
   const prof = share.build(gameDef(gameId), name || (ctx.prof && ctx.prof.name) || gameDef(gameId).name, rep.mods, shareExtra(gameId, ctx));
   return { code: share.encode(prof), profile: prof };
 });
 handle('share:saveFile', async (code, name) => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), `${U.safeName(name || 'profil')}.cmprofile`), filters: [{ name: 'Profil CodeManager', extensions: ['cmprofile'] }] }); if (r.canceled) return null; fs.writeFileSync(r.filePath, code); return r.filePath; });
 handle('share:readFile', f => U.readText(f, '').trim());
-handle('share:preview', (gameId, profileId, input) => {
+handle('share:preview', async (gameId, profileId, input) => {
   const prof = share.decode(input);
   if (prof.game !== gameId) throw new Error(`Ten profil jest dla gry „${(gameDef(prof.game) || {}).name || prof.game}”.`);
-  const p = share.plan(prof, gameReport(gameId, profileId).mods);
+  const p = share.plan(prof, (await gameReport(gameId, profileId)).mods);
   return { name: prof.name, mc: prof.mc, total: prof.mods.length, toggle: p.toggle.map(t => ({ name: t.mod.name, want: t.want })), download: p.download.map(d => ({ name: d.n, version: d.v, source: d.h ? 'Modrinth' : d.ts ? 'Thunderstore' : d.nx ? 'Nexus Mods' : null })), extra: p.extra.map(m => m.name), same: p.same.length };
 });
 handle('share:import', async (jobId, gameId, profileId, input, { disableExtra } = {}) => {
   const log = jobLog(jobId), progress = jobProg(jobId);
   const prof = share.decode(input); const g = gameDef(gameId); const ctx = profileCtx(gameId, profileId);
   await autoSnapshot(gameId, profileId, 'przed importem profilu');
-  const p = share.plan(prof, gameReport(gameId, profileId).mods);
+  const p = share.plan(prof, (await gameReport(gameId, profileId)).mods);
   const tctx = { gameId, gamePath: ctx.info.path };
   let toggled = 0;
   for (const t of p.toggle) { try { compat.toggle(t.mod, tctx); toggled++; log(`${t.want ? 'Włączono' : 'Wyłączono'} ${t.mod.name}`); } catch (e) { log('⚠ ' + t.mod.name + ': ' + e.message); } }
@@ -820,6 +827,16 @@ handle('share:import', async (jobId, gameId, profileId, input, { disableExtra } 
 // ---------- notatki i tagi ----------
 handle('notes:get', gameId => ({ notes: notes.forGame(gameId), tags: notes.allTags(gameId) }));
 handle('notes:set', (gameId, mod, data) => notes.set(gameId, mod, data));
+handle('notes:lock', (gameId, mod, lock) => notes.setLock(gameId, mod, lock));
+
+// ---------- automatyczne kolekcje z tagów ----------
+handle('profiles:fromTag', async (gameId, scope, tag, name) => {
+  const mods = (await gameReport(gameId, scope === 'game' ? null : scope)).mods;
+  const keys = new Set(notes.withTag(gameId, tag));
+  const p = profiles.create(gameId, scope, name || `Tag: ${tag}`, mods.map(m => ({ ...m, enabled: m.toggleable && keys.has(normKey(m)) })));
+  p.tag = tag; profiles.save();
+  return p;
+});
 
 // ---------- kosz ----------
 handle('trash:list', gameId => trash.list(gameId || null));
@@ -829,8 +846,8 @@ handle('trash:empty', gameId => { trash.empty(gameId || null); return true; });
 
 // ---------- bisekcja ----------
 const bkey = (g, p) => `${g}:${p || 'game'}`;
-function bisectApply(gameId, profileId, want) {
-  const mods = gameReport(gameId, profileId).mods; const ctx = { gameId, gamePath: infoFor(gameId).path };
+async function bisectApply(gameId, profileId, want) {
+  const mods = (await gameReport(gameId, profileId)).mods; const ctx = { gameId, gamePath: infoFor(gameId).path };
   let n = 0; const errors = [];
   for (const m of bisect.changes(mods, want)) { try { compat.toggle(m, ctx); n++; } catch (e) { errors.push(`${m.name}: ${e.message}`); } }
   return { changed: n, errors };
@@ -839,22 +856,22 @@ const bisectView = s => (s ? { ...s, roundsLeft: bisect.roundsLeft(s), on: s.tes
 handle('bisect:get', (gameId, profileId) => bisectView(bisects.get(bkey(gameId, profileId))));
 handle('bisect:start', async (gameId, profileId, keepOn) => {
   await autoSnapshot(gameId, profileId, 'przed szukaniem winowajcy');
-  const s = bisect.start(gameReport(gameId, profileId).mods, { keepOn });
+  const s = bisect.start((await gameReport(gameId, profileId)).mods, { keepOn });
   bisects.set(bkey(gameId, profileId), s);
-  const r = bisectApply(gameId, profileId, bisect.desired(s));
+  const r = await bisectApply(gameId, profileId, bisect.desired(s));
   return { ...bisectView(s), applied: r };
 });
-handle('bisect:answer', (gameId, profileId, problem) => {
+handle('bisect:answer', async (gameId, profileId, problem) => {
   const s = bisect.answer(bisects.get(bkey(gameId, profileId)), !!problem);
   bisects.set(bkey(gameId, profileId), s);
-  const r = bisectApply(gameId, profileId, bisect.desired(s));
+  const r = await bisectApply(gameId, profileId, bisect.desired(s));
   return { ...bisectView(s), applied: r };
 });
-handle('bisect:finish', (gameId, profileId, { keepCulpritOff } = {}) => {
+handle('bisect:finish', async (gameId, profileId, { keepCulpritOff } = {}) => {
   const s = bisects.get(bkey(gameId, profileId)); if (!s) return null;
   const want = new Map(s.original.map(m => [m.key, m.enabled]));
   if (keepCulpritOff && s.culprit) want.set(s.culprit, false);
-  const r = bisectApply(gameId, profileId, want);
+  const r = await bisectApply(gameId, profileId, want);
   bisects.set(bkey(gameId, profileId), null);
   return r;
 });
@@ -864,11 +881,11 @@ handle('report:build', async ({ target, analysis, file }) => {
   let rep = null; let t = null; let logTail = null;
   if (target && target.gameId) {
     const ctx = profileCtx(target.gameId, target.profileId); const g = gameDef(target.gameId);
-    try { rep = gameReport(target.gameId, target.profileId); } catch { rep = null; }
+    try { rep = await gameReport(target.gameId, target.profileId); } catch { rep = null; }
     t = { kind: 'game', name: g.name, detail: ctx.prof && ctx.prof.name !== 'Folder gry' ? `${ctx.prof.name}${ctx.mcVersion ? ` (${ctx.mcVersion} ${ctx.loader || ''})` : ''}` : null, path: ctx.root };
   } else if (target && target.serverId) {
     const s = servers.get(target.serverId); t = { kind: 'server', name: s.name, detail: `${(STYPES[s.type] || {}).name}${s.variant ? ' ' + s.variant : ''}${s.version ? ' ' + s.version : ''}`, path: s.path };
-    try { rep = servers.check(target.serverId); } catch { rep = null; }
+    try { rep = await work('serverCheck', { server: servers.get(target.serverId) }); } catch { rep = null; }
   }
   if (file) { try { logTail = String(file).startsWith('console:') ? servers.getLog(file.slice(8)).slice(-80).join('\n') : analyzer.readTail(file, 64 * 1024); } catch { /* */ } }
   return reportTxt.build({ appVersion: app.getVersion(), electron: process.versions.electron, target: t, report: rep, analysis, file: file && !String(file).startsWith('console:') ? file : null, logTail });
@@ -879,7 +896,7 @@ handle('report:save', async text => { const r = await dialog.showSaveDialog(win,
 handle('analyzer:url', async (url, ctx = {}) => {
   const { text, url: raw } = await analyzer.fetchLog(url);
   let pkgIndex = [];
-  if (ctx.gameId === 'minecraft') pkgIndex = analyzer.buildPackageIndex(profileCtx('minecraft', ctx.profileId).modsDir);
+  if (ctx.gameId === 'minecraft') { const md = profileCtx('minecraft', ctx.profileId).modsDir; pkgIndex = await work('pkgIndex', { modsDir: md }, () => analyzer.buildPackageIndex(md)); }
   const r = analyzer.analyzeText(text, { pkgIndex });
   const tmp = path.join(userData, 'logs-online'); fs.mkdirSync(tmp, { recursive: true });
   const file = path.join(tmp, 'log-' + Date.now() + '.txt'); fs.writeFileSync(file, text);
@@ -897,7 +914,7 @@ handle('games:launch', async (gameId, profileId) => {
     const scope = profileId || 'game';
     const list = profiles.list(gameId, scope);
     if (list.profiles.find(p => p.id === gs.launchProfile) && list.active !== gs.launchProfile) {
-      const plan = profiles.plan(gameId, scope, gs.launchProfile, gameReport(gameId, profileId).mods);
+      const plan = profiles.plan(gameId, scope, gs.launchProfile, (await gameReport(gameId, profileId)).mods);
       for (const m of plan.changes) { try { compat.toggle(m, { gameId, gamePath: info.path }); } catch { /* */ } }
       profiles.setActive(gameId, scope, gs.launchProfile);
     }
@@ -942,10 +959,11 @@ async function checkUpdatesFor(t, log) {
     return thunder.updateAll({ root: ctx.root, log, dryRun: true });
   }
   const g = gameDef(t.gameId); const ctx = profileCtx(t.gameId, t.profileId);
-  if (g.checker === 'minecraft') return modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, dryRun: true });
-  if (g.checker === 'bepinex') return thunder.updateAll({ root: ctx.root, log, dryRun: true });
+  const skipFiles = await lockedFiles(t.gameId, t.profileId);
+  if (g.checker === 'minecraft') return modrinth.updateAll({ modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log, dryRun: true, skipFiles });
+  if (g.checker === 'bepinex') return thunder.updateAll({ root: ctx.root, log, dryRun: true, skipFiles });
   if (g.checker === 'factorio') { const gi = U.readJSON(path.join(ctx.info.path, 'data', 'base', 'info.json'), {}); const items = await G2.factorioUpdates(ctx.info.path, gi.version, { download: false, log }); return { available: items.filter(i => i.level === 'info' && /dostępna|nowsza|→/i.test(i.title)).map(i => ({ name: i.title })), upToDate: 0, unknown: [] }; }
-  const items = await nexusUpdates(t.gameId, ctx, log); return { available: items.filter(i => i.nexus).map(i => ({ name: i.title, url: i.url })), upToDate: 0, unknown: [], manual: true };
+  const items = await nexusUpdates(t.gameId, ctx, log, skipFiles); return { available: items.filter(i => i.nexus).map(i => ({ name: i.title, url: i.url })), upToDate: 0, unknown: [], manual: true };
 }
 handle('updates:targets', () => updateTargets());
 handle('updates:checkAll', async jobId => {
@@ -954,7 +972,7 @@ handle('updates:checkAll', async jobId => {
   for (let i = 0; i < list.length; i++) {
     const t = list[i]; emit('job:progress', { jobId, pct: Math.round((i / list.length) * 100) });
     log(`Sprawdzam: ${t.name} (${t.service})…`);
-    try { const r = await checkUpdatesFor(t, log); out.push({ ...t, available: r.available || [], upToDate: r.upToDate || 0, unknown: (r.unknown || []).length, manual: !!r.manual }); }
+    try { const r = await checkUpdatesFor(t, log); out.push({ ...t, available: r.available || [], upToDate: r.upToDate || 0, unknown: (r.unknown || []).length, locked: (r.locked || []).length, manual: !!r.manual }); }
     catch (e) { out.push({ ...t, error: e.message, available: [] }); log('✖ ' + e.message); }
   }
   emit('job:progress', { jobId, pct: 100 });
@@ -1080,5 +1098,120 @@ handle('portable:disable', async jobId => {
   const old = PORTABLE_DIR + '-wylaczony-' + Date.now().toString(36);
   log(`✔ Skopiowano ${n} plików do ${defaultUserData}. Folder obok programu zostanie przemianowany na ${path.basename(old)}.`);
   setTimeout(() => { try { fs.renameSync(PORTABLE_DIR, old); } catch { /* */ } app.relaunch(); app.isQuitting = true; app.exit(0); }, 1500);
+  return true;
+});
+
+// =====================================================================
+// Wersja 1.6: ostrzeżenia przed instalacją, polecane mody, paczki zasobów
+// i shadery, alarmy zasobów, podgląd mapy Minecraft
+// =====================================================================
+const precheck = require('./mods/precheck');
+const recommend = require('./mods/recommend');
+const mcpacks = require('./mods/mcpacks');
+
+// ---------- ostrzeżenie przed instalacją ----------
+handle('precheck:modrinth', async (target, projectId) => {
+  if (config.settings.warnBeforeInstall === false) return { warnings: [] };
+  const ctx = target.serverId ? serverCtx(target.serverId) : profileCtx(target.gameId, target.profileId);
+  if (!ctx.modsDir) return { warnings: [] };
+  return precheck.modrinth(projectId, { modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader }, modrinth);
+});
+handle('precheck:archives', async (gameId, files) => {
+  if (config.settings.warnBeforeInstall === false) return [];
+  const out = [];
+  for (const f of files) { const entries = await precheck.listArchive(f); for (const o of precheck.overlaps(entries, nexusReg.forGame(gameId))) out.push({ archive: path.basename(f), ...o }); }
+  return out;
+});
+handle('precheck:nexus', async (gameId, modId, fileId) => {
+  if (config.settings.warnBeforeInstall === false) return [];
+  const f = (await nexus.files(nexus.DOMAINS[gameId], modId)).find(x => +x.file_id === +fileId);
+  if (!f || !f.content_preview_link) return [];
+  const r = await fetch(f.content_preview_link, { headers: { 'User-Agent': 'CodeManager' } }).catch(() => null);
+  if (!r || !r.ok) return [];
+  const entries = precheck.flattenPreview(await r.json());
+  return precheck.overlaps(entries, nexusReg.forGame(gameId).filter(e => e.modId !== +modId));
+});
+
+// ---------- polecane mody ----------
+handle('recommend:list', async target => {
+  const ctx = target.serverId ? serverCtx(target.serverId) : profileCtx(target.gameId, target.profileId);
+  if (!ctx.modsDir) return [];
+  const installed = new Set();
+  for (const f of U.listFiles(ctx.modsDir).filter(x => /\.jar(\.disabled)?$/i.test(x))) {
+    installed.add(path.basename(f).toLowerCase().replace(/\.disabled$/, '').replace(/\.jar$/, ''));
+  }
+  try { const rep = target.serverId ? await work('serverCheck', { server: servers.get(target.serverId) }) : await gameReport(target.gameId, target.profileId); for (const m of rep.mods) { if (m.id) installed.add(String(m.id).toLowerCase()); } } catch { /* */ }
+  try { const idx = await modrinth.installedIndex(ctx.modsDir); const ids = [...idx.projects.keys()]; for (const p of await modrinth.projectsInfo(ids)) installed.add(p.slug.toLowerCase()); } catch { /* bez sieci – wystarczą identyfikatory modów */ }
+  const loader = (ctx.loader || '').toLowerCase();
+  const cands = recommend.candidates(installed, loader).slice(0, 10);
+  if (!cands.length) return [];
+  let infos = [];
+  try { infos = await modrinth.projectsInfo(cands.map(c => c.slug)); } catch { return []; }
+  const out = [];
+  for (const c of cands) {
+    const p = infos.find(x => x.slug === c.slug); if (!p) continue;
+    if (ctx.mcVersion && !(p.game_versions || []).includes(ctx.mcVersion)) continue;
+    const ls = loader === 'quilt' ? ['quilt', 'fabric'] : loader === 'purpur' ? ['purpur', 'paper', 'spigot', 'bukkit'] : loader === 'paper' ? ['paper', 'spigot', 'bukkit'] : [loader];
+    if (loader && !(p.loaders || []).some(l => ls.includes(l))) continue;
+    out.push({ id: p.id, slug: p.slug, title: p.title, description: p.description, icon: p.icon_url, downloads: p.downloads, why: c.why, url: `https://modrinth.com/${p.project_type}/${p.slug}` });
+  }
+  return out.slice(0, 6);
+});
+
+// ---------- paczki zasobów i shadery (Minecraft) ----------
+const mcRoot = profileId => profileCtx('minecraft', profileId).root;
+handle('mcpacks:list', profileId => mcpacks.list(mcRoot(profileId)));
+handle('mcpacks:toggle', (profileId, name, on) => mcpacks.togglePack(mcRoot(profileId), name, on));
+handle('mcpacks:move', (profileId, name, dir) => mcpacks.movePack(mcRoot(profileId), name, dir));
+handle('mcpacks:shader', (profileId, name) => mcpacks.setShader(mcRoot(profileId), name));
+handle('mcpacks:add', (profileId, kind, files) => {
+  const dir = path.join(mcRoot(profileId), kind === 'shader' ? 'shaderpacks' : 'resourcepacks'); fs.mkdirSync(dir, { recursive: true });
+  for (const f of files) { const d = path.join(dir, path.basename(f)); if (U.isDir(f)) U.copyRecursive(f, d); else fs.copyFileSync(f, d); }
+  return dir;
+});
+handle('mcpacks:install', async (jobId, profileId, kind, projectId) => {
+  const ctx = profileCtx('minecraft', profileId);
+  const dir = path.join(ctx.root, kind === 'shader' ? 'shaderpacks' : 'resourcepacks');
+  return modrinth.install(projectId, { modsDir: dir, mcVersion: kind === 'shader' ? null : ctx.mcVersion, loader: null, log: jobLog(jobId), progress: jobProg(jobId), backupRoot });
+});
+handle('mcpacks:remove', async (profileId, p) => trash.put(p, { gameId: 'minecraft' }));
+
+// ---------- alarmy zasobów serwera ----------
+monitor.onAlarm = (id, a) => { const s = servers.servers.find(x => x.id === id); if (s) { servers.log(id, `⚠ Alarm: ${a.kind === 'cpu' ? `procesor ${Math.round(a.value)}%` : `pamięć ${(a.value / 1048576).toFixed(0)} MB`} od ${a.minutes} min (limit ${a.limit}${a.kind === 'cpu' ? '%' : ' MB'})`); notifier.event('alarm', { ...s, typeName: (STYPES[s.type] || {}).name }, a); } };
+
+// ---------- podgląd mapy Minecraft (BlueMap / squaremap / dynmap) ----------
+function webmapInfo(s) {
+  const plugin = ['paper', 'purpur'].includes(s.variant);
+  const dir = path.join(s.path, plugin ? 'plugins' : 'mods');
+  const jars = U.listFiles(dir).map(f => path.basename(f).toLowerCase()).filter(f => f.endsWith('.jar'));
+  const cfg = (...p) => path.join(s.path, ...p);
+  const num = (t, re, d) => { const m = t && t.match(re); return m ? +m[1] : d; };
+  if (jars.some(j => j.startsWith('bluemap'))) {
+    const base = plugin ? cfg('plugins', 'BlueMap') : cfg('config', 'bluemap');
+    const core = path.join(base, 'core.conf');
+    const coreT = U.readText(core);
+    return { kind: 'bluemap', name: 'BlueMap', port: num(U.readText(path.join(base, 'webserver.conf')), /^\s*port\s*:\s*(\d+)/m, 8100), configured: !!coreT, accepted: !!(coreT && /accept-download\s*:\s*true/.test(coreT)), core };
+  }
+  if (jars.some(j => j.startsWith('squaremap'))) {
+    const t = U.readText(plugin ? cfg('plugins', 'squaremap', 'config.yml') : cfg('config', 'squaremap', 'config.yml'));
+    return { kind: 'squaremap', name: 'squaremap', port: num(t, /internal-webserver:[\s\S]*?port:\s*(\d+)/, 8080), configured: true, accepted: true };
+  }
+  if (jars.some(j => j.startsWith('dynmap'))) {
+    const t = U.readText(plugin ? cfg('plugins', 'dynmap', 'configuration.txt') : cfg('dynmap', 'configuration.txt'));
+    return { kind: 'dynmap', name: 'Dynmap', port: num(t, /^webserver-port:\s*(\d+)/m, 8123), configured: true, accepted: true };
+  }
+  return null;
+}
+handle('webmap:status', id => { const s = servers.get(id); return { supported: s.type === 'minecraft' && s.variant !== 'vanilla', running: servers.procs.has(id), map: webmapInfo(s), variant: s.variant }; });
+handle('webmap:install', async (jobId, id, which) => {
+  const ctx = serverCtx(id);
+  if (!['bluemap', 'squaremap'].includes(which)) throw new Error('Nieznana mapa');
+  return modrinth.install(which, { modsDir: ctx.modsDir, mcVersion: ctx.mcVersion, loader: ctx.loader, log: jobLog(jobId), progress: jobProg(jobId), backupRoot });
+});
+handle('webmap:accept', id => {
+  const m = webmapInfo(servers.get(id));
+  if (!m || m.kind !== 'bluemap' || !m.core || !U.exists(m.core)) throw new Error('Plik core.conf BlueMap jeszcze nie istnieje – uruchom serwer raz.');
+  const t = U.readText(m.core, '');
+  fs.writeFileSync(m.core, /accept-download\s*:/.test(t) ? t.replace(/accept-download\s*:\s*\w+/, 'accept-download: true') : t + '\naccept-download: true\n');
   return true;
 });

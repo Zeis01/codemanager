@@ -10,6 +10,7 @@ const EVENTS = {
   leave: { label: 'Gracz wyszedł', color: 0x6b7280, discord: false, system: false },
   backup: { label: 'Kopia zapasowa gotowa', color: 0x4cb877, discord: true, system: true },
   'backup-failed': { label: 'Kopia zapasowa nie powiodła się', color: 0xe5534b, discord: true, system: true },
+  alarm: { label: 'Serwer przekracza limit zasobów', color: 0xd6a443, discord: true, system: true },
   update: { label: 'Dostępna aktualizacja CodeManager', color: 0x4cb877, discord: false, system: true },
 };
 
@@ -24,6 +25,7 @@ function message(kind, server, data = {}) {
     case 'backup': return `Kopia ${n} zapisana${data.size ? ` (${(data.size / 1048576).toFixed(1)} MB)` : ''}.`;
     case 'backup-failed': return `Kopia ${n} nie powiodła się: ${data.error || 'nieznany błąd'}.`;
     case 'update': return `Dostępna jest wersja ${data.version}.`;
+    case 'alarm': return `${n}: ${data.kind === 'cpu' ? `procesor ${Math.round(data.value)}% (limit ${data.limit}%)` : `pamięć ${(data.value / 1048576).toFixed(0)} MB (limit ${data.limit} MB)`} od ${data.minutes} min.`;
     default: return String(kind);
   }
 }

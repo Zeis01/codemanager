@@ -36,7 +36,7 @@ function sizeOf(p) {
 }
 
 class Snapshots {
-  constructor(root) { this.root = root; }
+  constructor(root, { sizeFn } = {}) { this.root = root; this.sizeFn = sizeFn || null; }
   dir(gameId) { return path.join(this.root, U.safeName(gameId)); }
   list(gameId) {
     return U.listFiles(this.dir(gameId)).filter(f => f.endsWith('.json')).map(f => ({ ...U.readJSON(f, {}), meta: f }))
@@ -46,7 +46,7 @@ class Snapshots {
   async create(game, ctx, { label = '', reason = 'ręczna', keep = 10, targets: custom = null, maxBytes = MAX_BYTES } = {}) {
     const t = custom || targets(game, ctx);
     const all = [...t.dirs, ...t.files];
-    const size = all.reduce((a, p) => a + sizeOf(p), 0);
+    const size = this.sizeFn ? await this.sizeFn(all) : all.reduce((a, p) => a + sizeOf(p), 0);
     if (size > maxBytes) throw new Error(`Mody zajmują ${(size / 1024 ** 3).toFixed(1)} GB – to za dużo na migawkę${maxBytes < MAX_BYTES ? ' automatyczną (limit ' + (maxBytes / 1024 ** 3).toFixed(1) + ' GB w Ustawieniach)' : ''}. Użyj zwykłej kopii zapasowej folderu.`);
     const dir = this.dir(game.id); fs.mkdirSync(dir, { recursive: true });
     const ext = U.isWin ? 'zip' : 'tar.gz';

@@ -53,6 +53,7 @@ async function versions(projectId, { mcVersion, loader } = {}) {
   return (await req(`/project/${encodeURIComponent(projectId)}/version?${q}`)) || [];
 }
 async function project(idOrSlug) { return req(`/project/${encodeURIComponent(idOrSlug)}`); }
+async function projectsInfo(ids) { if (!ids.length) return []; return (await req(`/projects?ids=${encodeURIComponent(JSON.stringify(ids))}`)) || []; }
 
 function primaryFile(v) { return v.files.find(f => f.primary) || v.files[0]; }
 
@@ -130,8 +131,11 @@ async function updateAll(ctx) {
   const body = { hashes: keys, algorithm: 'sha1', loaders: loadersFor(ctx.loader), game_versions: ctx.mcVersion ? [ctx.mcVersion] : undefined };
   const ups = (await req('/version_files/update', { method: 'POST', body: JSON.stringify(body) })) || {};
   const known = (await req('/version_files', { method: 'POST', body: JSON.stringify({ hashes: keys, algorithm: 'sha1' }) })) || {};
+  const skip = new Set((ctx.skipFiles || []).map(f => path.resolve(f).toLowerCase()));
+  result.locked = [];
   for (const h of keys) {
     const old = byHash[h];
+    if (skip.has(path.resolve(old).toLowerCase())) { result.locked.push(path.basename(old)); continue; }
     if (!known[h]) { result.unknown.push(path.basename(old)); continue; }
     const nv = ups[h];
     if (!nv || nv.id === known[h].id) { result.upToDate++; continue; }
@@ -205,4 +209,4 @@ async function importMrpack(file, targetDir, { side = 'client', log, progress } 
   return { name: pack.name, mcVersion: pack.mcVersion, loader: pack.loader, loaderVersion: pack.loaderVersion, count: list.length };
 }
 
-module.exports = { search, versions, project, install, updateAll, findByModId, replaceFile, readMrpack, importMrpack, installedIndex, loadersFor, sha1 };
+module.exports = { projectsInfo, search, versions, project, install, updateAll, findByModId, replaceFile, readMrpack, importMrpack, installedIndex, loadersFor, sha1 };

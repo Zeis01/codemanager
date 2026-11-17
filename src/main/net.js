@@ -134,4 +134,4 @@ async function pickJava(required, custom) {
   return { java: ok[0] || null, all };
 }
 
-module.exports = { getJSON, getText, download, githubLatest, tempFile, extractZip, zipTopFolder, extract7z, extractTar, findJavas, pickJava, javaVersion };
+module.exports = { sevenZipBin, getJSON, getText, download, githubLatest, tempFile, extractZip, zipTopFolder, extract7z, extractTar, findJavas, pickJava, javaVersion };

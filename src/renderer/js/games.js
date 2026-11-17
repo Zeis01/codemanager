@@ -118,7 +118,7 @@ App.views = App.views || {};
       <div class="tabs" role="tablist">
         <button data-tab="mods">Mody</button>${g.compat === 'none' ? '' : '<button data-tab="compat">Zgodność</button>'}<button data-tab="conflicts">Konflikty</button>${['bethesda', 'rimworld'].includes(g.checker) ? '<button data-tab="order">Kolejność ładowania</button>' : ''}<button data-tab="get">Pobierz mody</button>
         ${(g.loaders && g.loaders.length) ? '<button data-tab="loader">Modloader</button>' : ''}
-        <button data-tab="saves">Zapisy gry</button><button data-tab="snaps">Migawki</button>
+        ${g.id === 'minecraft' ? '<button data-tab="packs">Zasoby i shadery</button>' : ''}<button data-tab="saves">Zapisy gry</button><button data-tab="snaps">Migawki</button>
         <button data-tab="settings">Ustawienia</button>
       </div>
       <div data-content></div>`;
@@ -141,6 +141,7 @@ App.views = App.views || {};
       if (tab === 'order') App.mt.loadOrderTab(content, ctx);
       if (tab === 'saves') App.mt.savesTab(content, ctx);
       if (tab === 'snaps') App.mt.snapshotsTab(content, ctx);
+      if (tab === 'packs') App.mt.packsTab(content, ctx);
     };
     $$('.tabs button', el).forEach(b => b.onclick = () => { if (App.leaveGuard && !App.leaveGuard()) return; App.leaveGuard = null; tab = b.dataset.tab; show(); });
     show();
@@ -171,7 +172,7 @@ App.views = App.views || {};
         ${ctx.g.compat === 'none' ? '' : `<button class="btn primary" data-check>${icon('shield')}Sprawdź zgodność</button>`}
       </div>
       ${ctx.g.compat === 'none' ? `<div class="note" style="margin-bottom:10px">Sprawdzanie zgodności jest wyłączone dla tej gry. Mody możesz instalować${App.state.defs.games.find(x => x.id === ctx.g.id).nexus ? ' z Nexus Mods (zakładka „Pobierz mody”),' : ''} z archiwum lub przeciągając pliki na listę, a także włączać i wyłączać je przełącznikiem.</div>` : ''}
-      <div class="table-wrap" data-drop><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Źródło</th><th>Stan</th><th style="width:124px"></th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap" data-drop><table class="table"><thead><tr><th style="width:52px">Wł.</th><th>Nazwa</th><th>Wersja</th><th>Źródło</th><th>Stan</th><th style="width:156px"></th></tr></thead><tbody></tbody></table></div>
       <p class="dim" style="font-size:12.5px;margin-top:8px">Przeciągnij pliki modów na listę, aby je dodać do: <span class="path">${esc(target)}</span>. Mody z Warsztatu Steam włączasz i wyłączasz w grze.</p>`;
     const tbody = $('tbody', c);
     const again = () => { delete App.state.reports[ctx.g.id]; tabMods(c, ctx); };
@@ -189,17 +190,18 @@ App.views = App.views || {};
         const st = ctx.g.compat === 'none' ? (m.enabled ? ['', 'Włączony'] : ['', 'Wyłączony']) : ({ ok: ['ok', 'Zgodny'], warn: ['warn', 'Ostrzeżenie'], error: ['error', 'Błąd'], disabled: ['', 'Wyłączony'] }[m.status] || ['', '-']);
         const tr = h(`<tr class="${m.enabled ? '' : 'off'}">
           <td>${m.toggleable ? `<label class="switch" title="${m.enabled ? 'Wyłącz' : 'Włącz'}"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span></span></label>` : `<label class="switch" title="Zarządzane przez grę lub Steam"><input type="checkbox" ${m.enabled ? 'checked' : ''} disabled><span></span></label>`}</td>
-          <td><div class="nm">${esc(m.name)} ${App.mt.tagChips(notes.notes[App.mt.noteKey(m)])}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
+          <td><div class="nm">${esc(m.name)} ${App.mt.tagChips(notes.notes[App.mt.noteKey(m)])}${(notes.notes[App.mt.noteKey(m)] || {}).lock ? `<span class="tag lock" title="Wersja zablokowana – pomijany przy „Aktualizuj wszystko”">${icon('key')}zablokowany</span>` : ''}</div>${m.id && m.id !== m.name ? `<div class="sub">${esc(m.id)}</div>` : ''}</td>
           <td class="mono">${esc(m.version || '-')}</td>
           <td><span class="sub">${esc(m.loader ? m.loader + ' · ' : '')}${esc(m.source || '')}${m.size ? ' · ' + fmtSize(m.size) : ''}</span></td>
           <td><span class="chip ${st[0]}">${st[1]}</span></td>
-          <td style="text-align:right"><button class="btn sm ghost icon" data-a="note" title="Notatka i tagi">${icon('edit')}</button>${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
+          <td style="text-align:right"><button class="btn sm ghost icon ${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'on' : ''}" data-a="lock" title="${(notes.notes[App.mt.noteKey(m)] || {}).lock ? 'Odblokuj aktualizacje' : 'Zablokuj wersję (nie aktualizuj)'}">${icon('key')}</button><button class="btn sm ghost icon" data-a="note" title="Notatka i tagi">${icon('edit')}</button>${m.file ? `<button class="btn sm ghost icon" data-a="show" title="Pokaż w folderze">${icon('folder')}</button>` : ''}${m.toggleable ? `<button class="btn sm ghost icon danger" data-a="del" title="Przenieś do kosza">${icon('trash')}</button>` : ''}</td></tr>`);
         const sw = $('input', tr);
         if (m.toggleable) sw.onchange = async () => { try { await api('mods:toggle', m, ctx.g.id); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); } catch { sw.checked = !sw.checked; } };
         tr.onclick = async e => {
           const a = e.target.closest('[data-a]'); if (!a) return;
           if (a.dataset.a === 'show') api('shell:show', m.file);
           if (a.dataset.a === 'note') App.mt.editNote(ctx.g.id, m, notes, draw);
+          if (a.dataset.a === 'lock') { const k = App.mt.noteKey(m); const on = !(notes.notes[k] || {}).lock; await api('notes:lock', ctx.g.id, m, on); notes.notes[k] = { ...(notes.notes[k] || { tags: [], note: '' }), lock: on || undefined }; toast(on ? `${m.name}: wersja zablokowana` : `${m.name}: aktualizacje odblokowane`); draw(); }
           if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza ${App.state.settings.programTrash === false ? 'systemowego' : 'CodeManager – przywrócisz go przez 30 dni (Narzędzia → Kosz)'}.`, 'Przenieś do kosza', true)) { await api('mods:remove', m.file, ctx.g.id, m.name); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
         };
         // wiersz klikalny → pokaż problemy moda
@@ -217,7 +219,7 @@ App.views = App.views || {};
     if ($('[data-check]', c)) $('[data-check]', c).onclick = () => { delete App.state.reports[ctx.g.id]; App.go('games', { id: ctx.g.id, tab: 'compat', profile: ctx.profileId, run: true }); };
     const addFiles = async files => { if (!files.length) return;
       const archives = files.filter(f => /\.(zip|7z|rar)$/i.test(f) && !['minecraft', 'factorio'].includes(ctx.g.id));
-      if (archives.length) { await api('nexus:installLocal', ctx.g.id, ctx.profileId, archives); files = files.filter(f => !archives.includes(f)); }
+      if (archives.length) { if (!(await App.mt.archiveWarn(ctx.g.id, archives))) return; await api('nexus:installLocal', ctx.g.id, ctx.profileId, archives); files = files.filter(f => !archives.includes(f)); }
       if (files.length) await api('mods:add', target, files); toast(`Dodano ${files.length} plik(ów)`); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); };
     $('[data-add]', c).onclick = async () => addFiles(await api('dialog:files', 'Wybierz pliki modów'));
     const drop = $('[data-drop]', c);
@@ -398,16 +400,23 @@ App.views = App.views || {};
   function profileBar(ctx, rep, refresh) {
     const scope = ctx.profileId || 'game';
     const bar = h(`<div class="modprofiles"><span class="muted">${icon('profile')}Profil modów</span><select class="input" data-p><option value="">— bieżący zestaw —</option></select>
-      <button class="btn sm" data-apply disabled>Przełącz</button><button class="btn sm ghost" data-save title="Zapisz obecny zestaw jako nowy profil">${icon('plus')}Nowy z obecnych</button><button class="btn sm ghost" data-upd disabled title="Nadpisz wybrany profil obecnym zestawem">${icon('save')}Zapisz</button><button class="btn sm ghost icon danger" data-del disabled title="Usuń profil">${icon('trash')}</button></div>`);
+      <button class="btn sm" data-apply disabled>Przełącz</button><button class="btn sm ghost" data-save title="Zapisz obecny zestaw jako nowy profil">${icon('plus')}Nowy z obecnych</button><button class="btn sm ghost" data-tagp title="Kolekcja z modów oznaczonych tagiem – zestaw liczy się od nowa przy każdym przełączeniu">${icon('profile')}Z tagu…</button><button class="btn sm ghost" data-upd disabled title="Nadpisz wybrany profil obecnym zestawem">${icon('save')}Zapisz</button><button class="btn sm ghost icon danger" data-del disabled title="Usuń profil">${icon('trash')}</button></div>`);
     const sel = $('[data-p]', bar);
     const load = async () => {
       const d = await api('profiles:list', ctx.g.id, scope);
-      sel.innerHTML = '<option value="">— bieżący zestaw —</option>' + d.profiles.map(p => `<option value="${p.id}" ${d.active === p.id ? 'selected' : ''}>${esc(p.name)} (${p.enabled.length} modów)</option>`).join('');
+      sel.innerHTML = '<option value="">— bieżący zestaw —</option>' + d.profiles.map(p => `<option value="${p.id}" ${d.active === p.id ? 'selected' : ''}>${esc(p.name)} ${p.tag ? `(kolekcja z tagu „${esc(p.tag)}”)` : `(${p.enabled.length} modów)`}</option>`).join('');
       upd();
     };
     const upd = () => { const on = !!sel.value; ['apply', 'upd', 'del'].forEach(k => { $(`[data-${k}]`, bar).disabled = !on; }); };
     sel.onchange = upd;
     $('[data-save]', bar).onclick = async () => { const n = await App.promptBox('Nowy profil modów', 'Nazwa profilu (np. „Tylko optymalizacja”, „Pełna paczka”)'); if (!n) return; await api('profiles:create', ctx.g.id, scope, n, rep.mods); toast(`Zapisano profil „${n}”`); load(); };
+    $('[data-tagp]', bar).onclick = async () => {
+      const nd = await App.mt.loadNotes(ctx.g.id);
+      const used = [...new Set(Object.values(nd.notes).flatMap(n => n.tags || []))];
+      if (!used.length) { toast('Najpierw oznacz mody tagami (przycisk ołówka przy modzie).', 'warn'); return; }
+      const body = App.h(`<div><div class="field"><label>Tag</label><select class="input" data-t>${used.map(t => `<option>${esc(t)}</option>`).join('')}</select></div><div class="field"><label>Nazwa kolekcji</label><input class="input" data-n placeholder="np. Tylko klient"></div><p class="dim" style="font-size:12.5px;margin:0">Po przełączeniu włączone będą tylko mody z tym tagiem. Gdy dodasz tag kolejnym modom, kolekcja uwzględni je automatycznie.</p></div>`);
+      modal({ title: 'Kolekcja z tagu', body, actions: [{ label: 'Anuluj' }, { label: 'Utwórz', primary: true, onClick: async ({ body: b }) => { const t = $('[data-t]', b).value; await api('profiles:fromTag', ctx.g.id, scope, t, $('[data-n]', b).value.trim() || `Tag: ${t}`); toast('Utworzono kolekcję'); load(); } }] });
+    };
     $('[data-upd]', bar).onclick = async () => { await api('profiles:update', ctx.g.id, scope, sel.value, rep.mods); toast('Zaktualizowano profil'); load(); };
     $('[data-del]', bar).onclick = async () => { if (await App.confirmBox('Usunąć profil?', 'Mody nie zostaną usunięte – tylko zapisany zestaw.', 'Usuń', true)) { await api('profiles:remove', ctx.g.id, scope, sel.value); load(); } };
     $('[data-apply]', bar).onclick = async () => {
@@ -450,7 +459,7 @@ App.views = App.views || {};
     c.innerHTML = `<div class="row" style="margin-bottom:14px"><div class="seg">${parts.map(p => `<button data-src="${p}">${{ modrinth: 'Modrinth', thunderstore: 'Thunderstore', nexus: 'Nexus Mods' }[p]}</button>`).join('')}</div><span style="flex:1"></span>${domain ? `<button class="btn sm" data-local>${icon('archive')}Zainstaluj z archiwum…</button>` : ''}</div><div data-body></div>`;
     const body = $('[data-body]', c);
     const local = $('[data-local]', c);
-    if (local) local.onclick = async () => { const f = await api('dialog:files', 'Wybierz archiwa modów (.zip, .7z)', [{ name: 'Archiwa', extensions: ['zip', '7z', 'rar'] }]); if (!f.length) return; const r = await api('nexus:installLocal', g.id, ctx.profileId, f); toast(`Zainstalowano (${r.length} elementów)`); delete App.state.reports[g.id]; };
+    if (local) local.onclick = async () => { const f = await api('dialog:files', 'Wybierz archiwa modów (.zip, .7z)', [{ name: 'Archiwa', extensions: ['zip', '7z', 'rar'] }]); if (!f.length) return; if (!(await App.mt.archiveWarn(g.id, f))) return; const r = await api('nexus:installLocal', g.id, ctx.profileId, f); toast(`Zainstalowano (${r.length} elementów)`); delete App.state.reports[g.id]; };
     const show = () => {
       $$('[data-src]', c).forEach(b => b.classList.toggle('active', b.dataset.src === src));
       if (src === 'modrinth') getModrinth(body, ctx, { gameId: g.id, profileId: ctx.profileId }, { mcVersion: ctx.prof && ctx.prof.mcVersion, loader: ctx.prof && ctx.prof.loader });
@@ -461,6 +470,13 @@ App.views = App.views || {};
     show();
   }
 
+  async function installModrinth(target, id, title, channel) {
+    if (!channel && !(await App.mt.modrinthWarn(target, id, title))) return;
+    const r2 = await App.runJob(`Instalacja: ${title}`, jobId => (channel ? channel(jobId, id) : window.cm.call('modrinth:install', jobId, target, id)), { doneMsg: x => `Zainstalowano ${x.length} plik(ów)${channel ? '' : ' (z zależnościami)'}.` });
+    if (r2) { delete App.state.reports[target.gameId]; }
+    return r2;
+  }
+  App.installModrinth = installModrinth;
   function getModrinth(body, ctx, target, opts) {
     const type = opts.type || 'mod';
     body.innerHTML = `<div class="row" style="margin-bottom:12px"><div class="searchbox">${icon('search')}<input class="input" style="width:340px" placeholder="Szukaj na Modrinth (np. sodium, create, worldedit)" data-q></div>
@@ -472,15 +488,13 @@ App.views = App.views || {};
       res.innerHTML = '<div class="progress indet"><i></i></div>';
       let r; try { r = await App.apiQuiet('modrinth:search', q.value.trim(), { mcVersion: opts.mcVersion, loader: opts.loader, type, sort: sort.value, limit: 30 }); } catch (e) { res.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; return; }
       res.innerHTML = r.hits.length ? '' : '<p class="muted">Brak wyników dla tej wersji i loadera.</p>';
+      if (!q.value.trim() && (type === 'mod' || type === 'plugin')) App.mt.recommendBox(res, target, id => installModrinth(target, id, id));
       for (const m of r.hits) {
         const card = h(`<div class="mcard">${m.icon ? `<img src="${esc(m.icon)}" alt="">` : `<div class="mcard-ph">${esc(m.title.slice(0, 1))}</div>`}<div class="mcard-b"><div class="mcard-t">${esc(m.title)} <span class="dim">· ${esc(m.author)}</span></div><div class="mcard-d">${esc(m.description)}</div>
           <div class="mcard-m"><span>${App.icon('download')}${Intl.NumberFormat('pl-PL', { notation: 'compact' }).format(m.downloads)}</span>${m.client === 'required' && m.server === 'unsupported' ? '<span class="chip">tylko klient</span>' : ''}${m.server === 'required' && m.client === 'unsupported' ? '<span class="chip">tylko serwer</span>' : ''}</div></div>
           <div class="mcard-a"><button class="btn sm primary" data-i>${icon('download')}Zainstaluj</button><button class="btn sm ghost" data-o>${icon('globe')}</button></div></div>`);
         $('[data-o]', card).onclick = () => api('shell:external', m.url);
-        $('[data-i]', card).onclick = async () => {
-          const r2 = await App.runJob(`Instalacja: ${m.title}`, jobId => window.cm.call('modrinth:install', jobId, target, m.id), { doneMsg: x => `Zainstalowano ${x.length} plik(ów) (z zależnościami).` });
-          if (r2) { delete App.state.reports[target.gameId]; }
-        };
+        $('[data-i]', card).onclick = () => installModrinth(target, m.id, m.title, opts.installCh);
         res.appendChild(card);
       }
     };
@@ -543,6 +557,7 @@ App.views = App.views || {};
     const md = modal({ title: m.name, wide: true, body });
     body.onclick = async e => {
       const b = e.target.closest('[data-f]'); if (!b) return;
+      if (!(await App.mt.nexusWarn(ctx.g.id, m.id, +b.dataset.f))) return;
       md.close();
       const r = await App.runJob(`Instalacja: ${m.name}`, jobId => window.cm.call('nexus:install', jobId, ctx.g.id, ctx.profileId, m.id, +b.dataset.f), { doneMsg: x => x.needsBrowser ? 'Otwieram stronę Nexus – kliknij tam „Mod Manager Download”.' : `Zainstalowano ${x.name}.` });
       if (r && r.needsBrowser) api('shell:external', r.url);

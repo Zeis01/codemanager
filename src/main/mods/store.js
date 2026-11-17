@@ -15,9 +15,21 @@ class Notes {
     const k = typeof mod === 'string' ? mod : normKey(mod);
     const g = this.data[gameId] = this.data[gameId] || {};
     const clean = { tags: [...new Set((tags || []).map(t => String(t).trim()).filter(Boolean))].slice(0, 12), note: String(note || '').slice(0, 4000) };
-    if (!clean.tags.length && !clean.note) delete g[k]; else g[k] = { ...clean, updatedAt: Date.now() };
+    const lock = !!(g[k] && g[k].lock);
+    if (!clean.tags.length && !clean.note && !lock) delete g[k]; else g[k] = { ...clean, ...(lock ? { lock: true } : {}), updatedAt: Date.now() };
     this.save(); return g[k] || null;
   }
+  // blokada wersji: mod pomijany przy „Aktualizuj wszystko”
+  setLock(gameId, mod, lock) {
+    const k = typeof mod === 'string' ? mod : normKey(mod);
+    const g = this.data[gameId] = this.data[gameId] || {};
+    const cur = g[k] || { tags: [], note: '' };
+    if (lock) g[k] = { ...cur, lock: true, updatedAt: Date.now() };
+    else { delete cur.lock; if (!(cur.tags || []).length && !cur.note) delete g[k]; else g[k] = cur; }
+    this.save(); return !!lock;
+  }
+  locked(gameId) { return Object.entries(this.forGame(gameId)).filter(([, v]) => v.lock).map(([k]) => k); }
+  withTag(gameId, tag) { return Object.entries(this.forGame(gameId)).filter(([, v]) => (v.tags || []).includes(tag)).map(([k]) => k); }
   allTags(gameId) { const s = new Set(TAGS); for (const v of Object.values(this.forGame(gameId))) (v.tags || []).forEach(t => s.add(t)); return [...s]; }
 }
 

@@ -91,7 +91,7 @@ function treeTotals(procs, rootPid) {
 class Monitor {
   constructor({ mgr, emit, interval = 10000, keep = 8640 }) {
     this.mgr = mgr; this.emit = emit; this.interval = interval; this.keep = keep;
-    this.state = new Map(); this.prev = new Map(); this.timer = null; this.sampling = false;
+    this.state = new Map(); this.prev = new Map(); this.timer = null; this.sampling = false; this.onAlarm = null; this.alarmState = new Map();
   }
   st(id) { if (!this.state.has(id)) this.state.set(id, { players: new Set(), count: null, history: [], chunky: null, chat: [] }); return this.state.get(id); }
   // wywoływane dla każdej linii konsoli
@@ -114,6 +114,22 @@ class Monitor {
   players(id) { const st = this.st(id); return { players: [...st.players], count: this.count(id), chunky: st.chunky }; }
   history(id) { return this.st(id).history; }
 
+  // alarm: wartość powyżej progu przez zadany czas → jedno powiadomienie, ponowne dopiero po spadku poniżej progu
+  checkAlarm(id, point) {
+    const srv = (this.mgr.servers || []).find(x => x.id === id); const a = srv && srv.alarm;
+    if (!a || !a.enabled) return;
+    const minutes = Math.max(1, +a.minutes || 5);
+    const st = this.alarmState.get(id) || {}; this.alarmState.set(id, st);
+    const checks = [['cpu', point.cpu, +a.cpu], ['mem', point.mem, +a.ramMB ? +a.ramMB * 1048576 : 0]];
+    for (const [kind, value, limit] of checks) {
+      if (!limit || value == null) continue;
+      const s = st[kind] = st[kind] || { since: null, fired: false };
+      if (value > limit) {
+        if (!s.since) s.since = point.t;
+        if (!s.fired && point.t - s.since >= minutes * 60000) { s.fired = true; if (this.onAlarm) this.onAlarm(id, { kind, value, limit: kind === 'mem' ? +a.ramMB : limit, minutes }); }
+      } else { s.since = null; s.fired = false; }
+    }
+  }
   start() { if (!this.timer) this.timer = setInterval(() => this.sample().catch(() => {}), this.interval); }
   stop() { clearInterval(this.timer); this.timer = null; }
   async sample() {
@@ -129,6 +145,7 @@ class Monitor {
         const point = { t: now, cpu: cpu == null ? null : Math.round(cpu * 10) / 10, mem: tot.rss, players: this.count(id) };
         const h = this.st(id).history; h.push(point); if (h.length > this.keep) h.splice(0, h.length - this.keep);
         this.emit('server:stats', { id, ...point });
+        this.checkAlarm(id, point);
       }
     } finally { this.sampling = false; }
   }

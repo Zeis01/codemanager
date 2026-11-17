@@ -294,6 +294,10 @@ App.views = App.views || {};
       ${s.type === 'minecraft' ? `<div class="grid" style="grid-template-columns:1fr 1fr;gap:12px"><div class="field"><label>Wersja Minecraft</label><input class="input" data-k="version" value="${esc(s.version || '')}"></div><div class="field"><label>Ścieżka Javy</label><input class="input mono" data-k="java" value="${esc(s.java || '')}" placeholder="java"></div></div>` : ''}
       ${t.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input class="input" data-s="${f.id}" value="${esc(s.settings[f.id] || '')}"></div>`).join('')}
       <div class="field"><label>Folder</label><div class="inline-input"><input class="input mono" readonly value="${esc(s.path)}"><button class="btn" data-open>${icon('folder')}</button></div></div>
+      <h3 style="margin:18px 0 8px">Alarm zasobów</h3>
+      <label class="check" style="margin-bottom:8px"><input type="checkbox" data-al="enabled" ${(s.alarm || {}).enabled ? 'checked' : ''}><span>Powiadom, gdy serwer długo przekracza limit (Windows i Discord)</span></label>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:0 12px;margin-left:26px"><div class="field"><label>Procesor powyżej (%)</label><input class="input" type="number" min="0" max="100" data-al="cpu" value="${esc((s.alarm || {}).cpu ?? 90)}"></div><div class="field"><label>Pamięć powyżej (MB)</label><input class="input" type="number" min="0" step="256" data-al="ramMB" value="${esc((s.alarm || {}).ramMB ?? Math.round((s.ram || 4096) * 1.1))}"></div><div class="field"><label>Przez ile minut</label><input class="input" type="number" min="1" max="120" data-al="minutes" value="${esc((s.alarm || {}).minutes ?? 5)}"></div></div>
+      <p class="dim" style="font-size:12px;margin:0 0 6px 26px">0 wyłącza dany próg. Pomiar co 10 s, gdy serwer działa i program jest otwarty.</p>
       <h3 style="margin:18px 0 8px">Powiadomienia Discord dla tego serwera</h3>
       <div class="field"><label>Własny webhook (puste = ten z Ustawień programu)</label><input class="input mono" data-dc="url" value="${esc((s.discord || {}).url || '')}" placeholder="https://discord.com/api/webhooks/…"></div>
       <label class="check" style="margin-bottom:14px"><input type="checkbox" data-dc="disabled" ${(s.discord || {}).disabled ? 'checked' : ''}><span>Nie wysyłaj powiadomień dla tego serwera</span></label>
@@ -304,6 +308,7 @@ App.views = App.views || {};
       $$('[data-k]', c).forEach(i => { patch[i.dataset.k] = i.type === 'number' ? +i.value : i.value.trim(); });
       $$('[data-s]', c).forEach(i => { patch.settings[i.dataset.s] = i.value.trim(); });
       patch.discord = { url: $('[data-dc="url"]', c).value.trim() || undefined, disabled: $('[data-dc="disabled"]', c).checked || undefined };
+      patch.alarm = { enabled: $('[data-al="enabled"]', c).checked, cpu: +$('[data-al="cpu"]', c).value || 0, ramMB: +$('[data-al="ramMB"]', c).value || 0, minutes: +$('[data-al="minutes"]', c).value || 5 };
       await api('servers:patch', s.id, patch); toast('Zapisano. Zmiany zadziałają po restarcie serwera.'); App.go('servers', { id: s.id, tab: 'settings' });
     };
     $('[data-reinstall]', c).onclick = async () => { App.go('servers', { id: s.id, tab: 'console' }); window.cm.call('servers:install', s.id).catch(e => toast(e.message, 'error')); };

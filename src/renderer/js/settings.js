@@ -7,7 +7,7 @@ App.views.settings = {
     const s = App.state.settings;
     const info = await api('app:info');
     el.innerHTML = `<div class="head"><div class="grow"><h1>Ustawienia</h1></div></div>
-      <div class="panel" style="margin-bottom:12px"><div class="panel-head"><h2>Wygląd</h2><button class="btn sm" data-timport>${icon('import')}Importuj motyw…</button><button class="btn sm" data-tsave>${icon('save')}Zapisz bieżący jako plik</button><button class="btn sm" data-tdir>${icon('folder')}Folder motywów</button></div>
+      <div class="panel" style="margin-bottom:12px"><div class="panel-head"><h2>Wygląd</h2><button class="btn sm" data-tedit>${icon('edit')}Edytuj motyw…</button><button class="btn sm" data-timport>${icon('import')}Importuj motyw…</button><button class="btn sm" data-tsave>${icon('save')}Zapisz bieżący jako plik</button><button class="btn sm" data-tdir>${icon('folder')}Folder motywów</button></div>
         <div class="themes" data-themes></div><div data-terr></div>
         <p class="dim" style="font-size:12px;margin:10px 0 0">Własne motywy to pliki <span class="mono">nazwa.theme.json</span> w folderze motywów (opis formatu w pliku README.txt). Zmiany w plikach są widoczne od razu po zapisaniu.</p></div>
       <div class="grid two" style="align-items:start">
@@ -54,6 +54,7 @@ App.views.settings = {
           <h3 style="margin:18px 0 8px">Mody</h3>
           <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="autoSnapshot" ${s.autoSnapshot !== false ? 'checked' : ''}><span>Migawka przed zmianami (aktualizacja, instalacja, profil, naprawa)</span></label>
           <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px;margin-left:26px"><div class="field"><label>Ile migawek na grę</label><input class="input" type="number" min="2" max="100" data-k="snapshotKeep" value="${esc(s.snapshotKeep || 10)}"></div><div class="field"><label>Limit migawki automatycznej (GB)</label><input class="input" type="number" min="0.1" step="0.5" data-k="autoSnapshotMaxGB" value="${esc(s.autoSnapshotMaxGB || 1)}"></div></div>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="warnBeforeInstall" ${s.warnBeforeInstall !== false ? 'checked' : ''}><span>Ostrzegaj przed konfliktami przed instalacją moda</span></label>
           <label class="check" style="margin-bottom:8px"><input type="checkbox" data-k="programTrash" ${s.programTrash !== false ? 'checked' : ''}><span>Usunięte mody trzymaj 30 dni w koszu CodeManager</span></label>
           <div class="row" style="margin:0 0 4px 26px"><button class="btn sm" data-trash>${icon('trash')}Otwórz kosz</button></div>
           <div class="field" style="margin-top:10px"><label>Ile kopii zapisów gry trzymać</label><input class="input" type="number" min="3" max="200" data-k="saveKeep" value="${esc(s.saveKeep || 20)}" style="max-width:160px"></div>
@@ -79,6 +80,7 @@ App.views.settings = {
     drawThemes();
     App.onThemesChanged = () => { if (App.current() === 'settings') drawThemes(); };
     $('[data-tdir]', el).onclick = () => api('themes:folder');
+    $('[data-tedit]', el).onclick = () => themeEditor(drawThemes);
     $('[data-timport]', el).onclick = async () => { const f = (await api('dialog:files', 'Wybierz plik motywu', [{ name: 'Motyw', extensions: ['json'] }]))[0]; if (!f) return; const id = await api('themes:import', f); await App.loadThemes(); App.applyTheme(id); await api('themes:select', id); drawThemes(); toast('Zaimportowano motyw'); };
     $('[data-tsave]', el).onclick = async () => {
       const n = await App.promptBox('Zapisz motyw jako plik', 'Nazwa motywu', 'Mój motyw'); if (!n) return;
@@ -167,3 +169,41 @@ App.views.settings = {
     }
   },
 };
+
+// Edytor motywów z podglądem na żywo
+const THEME_LABELS = {
+  bg0: 'Pasek tytułu i menu', bg1: 'Tło treści', bg2: 'Panele', bg3: 'Najechanie, elementy wypukłe', bg4: 'Zaznaczenie', line: 'Linie', line2: 'Mocniejsze linie, obramowania',
+  input: 'Pola tekstowe', text: 'Tekst', text2: 'Tekst drugorzędny', text3: 'Tekst przygaszony', accent: 'Akcent', accentStrong: 'Przyciski główne', onAccent: 'Tekst na przyciskach głównych',
+  warn: 'Ostrzeżenia', error: 'Błędy', info: 'Informacje', sidebar: 'Menu boczne', titlebar: 'Pasek tytułu', folder: 'Foldery w edytorze',
+};
+function themeEditor(redraw) {
+  const { h, $, $$, esc, api, toast, modal } = App;
+  const startId = App.state.themeId;
+  const cur = Themes.current();
+  const baseKey = (startId || '').startsWith('builtin:') ? startId.slice(8) : (cur.type === 'light' ? 'light' : 'classic');
+  const colors = { ...cur.colors };
+  let radius = typeof cur.radius === 'number' ? cur.radius : 4;
+  const toHex = c => { const x = String(c || '').trim(); if (/^#[0-9a-f]{6}$/i.test(x)) return x; if (/^#[0-9a-f]{3}$/i.test(x)) return '#' + x.slice(1).split('').map(y => y + y).join(''); const m = x.match(/\d+/g); return m ? '#' + m.slice(0, 3).map(n => (+n).toString(16).padStart(2, '0')).join('') : '#000000'; };
+  const body = h(`<div class="theme-ed"><div class="row" style="margin-bottom:12px;gap:12px"><div class="field" style="flex:1;margin:0"><label>Nazwa</label><input class="input" data-name value="${esc((cur.name || 'Mój motyw') + (startId && startId.startsWith('builtin:') ? ' (mój)' : ''))}"></div>
+    <div class="field" style="margin:0"><label>Bazuje na</label><select class="input" data-base>${Object.entries(Themes.BUILTIN).map(([k, t]) => `<option value="${k}" ${k === baseKey ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div class="field" style="margin:0;width:140px"><label>Zaokrąglenie: <span data-rv>${radius}</span> px</label><input type="range" min="0" max="10" value="${radius}" data-radius></div></div>
+    <div class="theme-grid">${Object.keys(Themes.KEYS).map(k => `<label class="tcol"><input type="color" data-c="${k}" value="${toHex(colors[k] || colors.bg0)}"><span>${esc(THEME_LABELS[k] || k)}</span><input class="input mono" data-t="${k}" value="${esc(colors[k] || '')}"></label>`).join('')}</div>
+    <p class="dim" style="font-size:12px;margin:10px 0 0">Zmiany widać od razu w całym programie. „Zapisz” tworzy plik w folderze motywów – możesz go potem edytować albo wysłać komuś.</p></div>`);
+  const apply = () => { Themes.apply(Themes.resolve({ name: $('[data-name]', body).value, extends: $('[data-base]', body).value, colors, radius })); };
+  body.addEventListener('input', e => {
+    const k = e.target.dataset.c || e.target.dataset.t;
+    if (e.target.dataset.c) { colors[k] = e.target.value; $(`[data-t="${k}"]`, body).value = e.target.value; }
+    else if (e.target.dataset.t) { if (!Themes.validColor(e.target.value)) return; colors[k] = e.target.value.trim(); $(`[data-c="${k}"]`, body).value = toHex(colors[k]); }
+    else if (e.target.dataset.radius !== undefined) { radius = +e.target.value; $('[data-rv]', body).textContent = radius; }
+    apply();
+  });
+  $('[data-base]', body).onchange = e => { const b = Themes.BUILTIN[e.target.value]; Object.assign(colors, b.colors); $$('[data-c]', body).forEach(i => { const k = i.dataset.c; if (colors[k]) { i.value = toHex(colors[k]); $(`[data-t="${k}"]`, body).value = colors[k]; } }); apply(); };
+  let saved = false;
+  modal({ title: 'Edytor motywu', wide: true, body, onClose: () => { if (!saved) App.applyTheme(startId); },
+    actions: [{ label: 'Anuluj' }, { label: 'Zapisz jako plik', primary: true, icon: 'save', onClick: async () => {
+      const name = $('[data-name]', body).value.trim() || 'Mój motyw';
+      const r = await api('themes:save', name, { name, extends: $('[data-base]', body).value, type: Themes.BUILTIN[$('[data-base]', body).value].type, colors, radius });
+      saved = true; await App.loadThemes(); App.applyTheme(r.id); await api('themes:select', r.id); redraw && redraw(); toast(`Zapisano motyw „${name}”`);
+    } }] });
+}
+
