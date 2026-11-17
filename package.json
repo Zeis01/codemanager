@@ -80,7 +80,10 @@
           "nxm"
         ]
       }
-    ]
+    ],
+    "releaseInfo": {
+      "releaseName": "CodeManager ${version}"
+    }
   },
   "repository": {
     "type": "git",
