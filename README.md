@@ -35,26 +35,6 @@ Wykrywa gry z bibliotek Steam (libraryfolders.vdf + appmanifest), Epic Games, Ro
 
 **Edytor** – Monaco: Edytuj pliki jak w Visual Studio Code.
 
-## Nowe gry (1.4)
-
-Gry oznaczone ★ mają najlepsze sprawdzanie zgodności (zależności, wersje, konflikty).
-
-| Gra | Zakres |
-|---|---|
-| ★ Cyberpunk 2077 | frameworki i ich wymagania (CET, RED4ext, redscript, TweakXL, ArchiveXL, Codeware, REDmod), błędy z logów |
-| ★ Wiedźmin 3 | konflikty skryptów między modami (Script Merger), mods.settings |
-| PAYDAY 2 | SuperBLT, BeardLib, poprawność mod.txt, duplikaty, log BLT |
-| My Summer Car | MSCLoader, mody i biblioteki we właściwych folderach |
-| Teardown | info.txt, pliki startowe, duplikaty |
-| S.T.A.L.K.E.R.: SoC / CS / CoP | gamedata i ustawienie fsgame.ltx |
-
-## Wygląd i motywy (1.3)
-
-- Domyślny motyw **Klasyczny**: szare tło i zielone wyróżnienia. Wbudowane są też: Grafit, Jasny, Nocny, Leśny i Wysoki kontrast (Ustawienia → Wygląd).
-- **Własne motywy**: pliki `nazwa.theme.json` w folderze motywów (przycisk „Folder motywów”). Wystarczy podać kolory do zmiany – reszta pochodzi z motywu bazowego (`"extends"`). Zmiany są widoczne od razu po zapisaniu pliku. Opis wszystkich kluczy jest w `README.txt` w folderze motywów, a przykład w `czerwony.theme.json`.
-- **Ikony gier** są pobierane z pamięci podręcznej biblioteki Steam, z pliku .exe gry albo (gdy gra nie jest zainstalowana, np. dla serwerów) z grafik Steam, które są zapisywane lokalnie.
-- Plik .exe i instalator mają ikonę taką jak w aplikacji.
-
 ## Uwagi
 
 - Serwer DayZ wymaga konta Steam z grą (SteamCMD poprosi o hasło/kod Steam Guard w konsoli).
