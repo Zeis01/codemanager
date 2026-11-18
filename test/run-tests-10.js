@@ -298,6 +298,57 @@ t('edytor bloczkowy: sprawdzanie połączeń i błędów, generowanie Lua/Python
   g3.target = 'lua'; g3.profile = 'lua'; const lua = B.generate(g3).code; assert(lua.includes('local punkty = 0') && lua.includes('if (punkty > 5) then'), lua);
 });
 
+t('1.8.1: mody w podfolderach i we własnym folderze modów', () => {
+  const F = require('../src/main/compat/folderscan');
+  const target = path.join(root, 'ue', '~mods'); const own = path.join(root, 'moje-mody');
+  w(path.join(target, 'Luzem_P.pak'), 'x');
+  w(path.join(target, 'Auta', 'Ferrari', 'Ferrari_P.pak'), 'x'); w(path.join(target, 'Auta', 'Ferrari', 'Ferrari_P.ucas'), 'x'); w(path.join(target, 'Auta', 'Ferrari', 'Ferrari_P.utoc'), 'x');
+  w(path.join(target, 'Mapy', 'Wyspa_P.pak.disabled'), 'x'); w(path.join(target, 'Mapy', 'opis.txt'), 'x'); w(path.join(target, 'Mapy', 'skrypt.lua'), 'x');
+  w(path.join(own, 'Inny.pak'), 'x'); w(path.join(own, 'Folder', 'Plugin.dll'), 'x');
+  const rep = { mods: [{ key: 'luz', file: path.join(target, 'Luzem_P.pak'), name: 'Luzem' }], issues: [], meta: {}, counts: { info: 0 } };
+  F.augment(rep, { checker: 'files', target, gamePath: path.join(root, 'ue'), settings: { modsDir: own } });
+  const names = rep.mods.map(m => m.name).sort();
+  assert.deepStrictEqual(names, ['Ferrari', 'Folder', 'Inny', 'Luzem', 'Plugin', 'Wyspa'].filter(n => n !== 'Folder'));
+  const fer = rep.mods.find(m => m.name === 'Ferrari'); assert.strictEqual(fer.files.length, 3); assert.strictEqual(fer.toggle, 'group'); assert(/Auta \/ Ferrari/.test(fer.source));
+  assert.strictEqual(rep.mods.find(m => m.name === 'Wyspa').enabled, false);
+  assert(rep.issues.some(i => /w podfolderach/.test(i.title)));
+  // przełączanie grupy .pak/.ucas/.utoc
+  require('../src/main/compat').toggle(fer, {}); assert(fs.existsSync(path.join(target, 'Auta', 'Ferrari', 'Ferrari_P.ucas.disabled')));
+  // bez głębokiego skanu i w grach z plikami gry w folderze docelowym nic nie jest dodawane
+  const rep2 = { mods: [], issues: [] }; F.augment(rep2, { checker: 'files', target, settings: { deepScan: false } }); assert.strictEqual(rep2.mods.length, 0);
+  const rep3 = { mods: [], issues: [] }; F.augment(rep3, { checker: 'bethesda', target, settings: {} }); assert.strictEqual(rep3.mods.length, 0);
+});
+
+t('1.8.1: nowe bloczki – listy, tekst, matematyka, czas, pliki (Python i JavaScript działają)', () => {
+  const B = require('../src/renderer/js/blocks-core.js');
+  const g = B.empty('python'); const L = (a, b) => B.connect(g, a, b);
+  const st = B.addNode(g, 'ev.start', 0, 0); const mk = B.addNode(g, 'list.new', 0, 0); const set = B.addNode(g, 'var.set', 0, 0, { name: 'gracze' });
+  const sp = B.addNode(g, 'text.split', 0, 0, { a: ' Ala , Ola ', sep: ',' }); const fe = B.addNode(g, 'flow.foreach', 0, 0);
+  const tr = B.addNode(g, 'text.trim', 0, 0); const lo = B.addNode(g, 'text.lower', 0, 0); const get1 = B.addNode(g, 'var.get', 0, 0, { name: 'gracze' }); const add = B.addNode(g, 'list.add', 0, 0);
+  const get2 = B.addNode(g, 'var.get', 0, 0, { name: 'gracze' }); const jn = B.addNode(g, 'list.join', 0, 0, { sep: '+' }); const pr = B.addNode(g, 'act.print', 0, 0);
+  const mx = B.addNode(g, 'math.max', 0, 0, { a: 3, b: 9 }); const pw = B.addNode(g, 'math.pow', 0, 0, { b: 2 }); const sel = B.addNode(g, 'logic.select', 0, 0, { a: 'tak', b: 'nie' }); const ct = B.addNode(g, 'list.contains', 0, 0, { v: 'ola' }); const get3 = B.addNode(g, 'var.get', 0, 0, { name: 'gracze' });
+  const pr2 = B.addNode(g, 'act.print', 0, 0); const pr3 = B.addNode(g, 'act.print', 0, 0); const tn = B.addNode(g, 'time.now', 0, 0); const gt = B.addNode(g, 'cmp.gt', 0, 0, { b: 0 }); const pr4 = B.addNode(g, 'act.print', 0, 0);
+  L({ node: st.id, pin: 'then' }, { node: set.id, pin: 'exec' }); L({ node: mk.id, pin: 'out' }, { node: set.id, pin: 'value' });
+  L({ node: set.id, pin: 'then' }, { node: fe.id, pin: 'exec' }); L({ node: sp.id, pin: 'out' }, { node: fe.id, pin: 'list' });
+  L({ node: fe.id, pin: 'loop' }, { node: add.id, pin: 'exec' }); L({ node: get1.id, pin: 'value' }, { node: add.id, pin: 'list' }); L({ node: fe.id, pin: 'item' }, { node: tr.id, pin: 'a' }); L({ node: tr.id, pin: 'out' }, { node: lo.id, pin: 'a' }); L({ node: lo.id, pin: 'out' }, { node: add.id, pin: 'v' });
+  L({ node: fe.id, pin: 'done' }, { node: pr.id, pin: 'exec' }); L({ node: get2.id, pin: 'value' }, { node: jn.id, pin: 'list' }); L({ node: jn.id, pin: 'out' }, { node: pr.id, pin: 'value' });
+  L({ node: pr.id, pin: 'then' }, { node: pr2.id, pin: 'exec' }); L({ node: mx.id, pin: 'out' }, { node: pw.id, pin: 'a' }); L({ node: pw.id, pin: 'out' }, { node: pr2.id, pin: 'value' });
+  L({ node: pr2.id, pin: 'then' }, { node: pr3.id, pin: 'exec' }); L({ node: get3.id, pin: 'value' }, { node: ct.id, pin: 'list' }); L({ node: ct.id, pin: 'out' }, { node: sel.id, pin: 'cond' }); L({ node: sel.id, pin: 'out' }, { node: pr3.id, pin: 'value' });
+  L({ node: pr3.id, pin: 'then' }, { node: pr4.id, pin: 'exec' }); L({ node: tn.id, pin: 'out' }, { node: gt.id, pin: 'a' }); L({ node: gt.id, pin: 'out' }, { node: pr4.id, pin: 'value' });
+  assert.deepStrictEqual(B.validate(g).filter(i => i.level === 'error'), []);
+  const cp = require('child_process');
+  const py = B.generate(g).code; fs.writeFileSync(path.join(root, 'n.py'), py);
+  const pyBin = ['python3', 'python', 'py'].find(b => { const v = cp.spawnSync(b, ['--version'], { encoding: 'utf8' }); return !v.error && v.status === 0 && /Python 3/.test(v.stdout + v.stderr); });
+  if (pyBin) { const r = cp.spawnSync(pyBin, [path.join(root, 'n.py')], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }); assert.deepStrictEqual(r.stdout.trim().split(/\r?\n/), ['ala+ola', '81', 'tak', 'True'], py + r.stderr); }
+  g.target = 'js'; const js = B.generate(g).code; fs.writeFileSync(path.join(root, 'n.js'), js);
+  assert.deepStrictEqual(cp.spawnSync(process.execPath, [path.join(root, 'n.js')], { encoding: 'utf8' }).stdout.trim().split(/\r?\n/), ['ala+ola', '81', 'tak', 'true'], js);
+  g.target = 'lua'; g.profile = 'lua'; const lua = B.generate(g).code; assert(lua.includes('table.insert(gracze') && lua.includes('table.concat') && lua.includes('os.time()'), lua);
+  // bloczki gier: dostępność i strona serwera
+  assert(B.library('lua', 'gmod').some(d => d.type === 'gmod.death') && !B.library('lua', 'fivem').some(d => d.type === 'gmod.death'));
+  const f = B.empty('lua', 'fivem'); f.realm = 'client'; B.addNode(f, 'fivem.weapon', 0, 0); assert(B.validate(f).some(i => /po stronie serwera/.test(i.msg)));
+  const fl = B.empty('lua', 'gmod'); B.addNode(fl, 'file.append', 0, 0); assert(B.validate(fl).some(i => /nie działa w wybranym/.test(i.msg)));
+});
+
 (async () => {
   for (const [n, f] of queue) { try { await f(); passed++; console.log('  ✔ ' + n); } catch (e) { failed++; console.log('  ✖ ' + n + '\n    ' + String(e.stack).split('\n').slice(0, 5).join('\n    ')); } }
   fs.rmSync(root, { recursive: true, force: true });

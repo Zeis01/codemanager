@@ -167,6 +167,7 @@ App.views = App.views || {};
         <div class="searchbox">${icon('search')}<input class="input" placeholder="Szukaj modu" data-q></div>
         <select class="input" style="width:auto" data-tagf><option value="">Wszystkie tagi</option>${notes.tags.map(t => `<option>${esc(t)}</option>`).join('')}</select>
         <span class="dim" style="flex:1;white-space:nowrap">${rep.mods.length} pozycji · ${rep.mods.filter(m => m.enabled).length} włączonych</span>
+        <button class="btn" data-refresh title="Wczytaj listę modów od nowa (np. po dodaniu plików poza programem)">${icon('refresh')}Odśwież</button>
         <button class="btn" data-update>${icon('update')}Aktualizuj wszystko</button>
         <button class="btn" data-add>${icon('plus')}Dodaj mody</button>
         <button class="btn" data-open>${icon('folder')}Folder modów</button>
@@ -204,7 +205,7 @@ App.views = App.views || {};
           if (a.dataset.a === 'ws') api('shell:external', `https://steamcommunity.com/sharedfiles/filedetails/?id=${m.workshopId}`);
           if (a.dataset.a === 'note') App.mt.editNote(ctx.g.id, m, notes, draw);
           if (a.dataset.a === 'lock') { const k = App.mt.noteKey(m); const on = !(notes.notes[k] || {}).lock; await api('notes:lock', ctx.g.id, m, on); notes.notes[k] = { ...(notes.notes[k] || { tags: [], note: '' }), lock: on || undefined }; toast(on ? `${m.name}: wersja zablokowana` : `${m.name}: aktualizacje odblokowane`); draw(); }
-          if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza ${App.state.settings.programTrash === false ? 'systemowego' : 'CodeManager – przywrócisz go przez 30 dni (Narzędzia → Kosz)'}.`, 'Przenieś do kosza', true)) { await api('mods:remove', m.file, ctx.g.id, m.name); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
+          if (a.dataset.a === 'del' && await App.confirmBox('Usunąć mod?', `<b>${esc(m.name)}</b> trafi do kosza ${App.state.settings.programTrash === false ? 'systemowego' : 'CodeManager – przywrócisz go przez 30 dni (Narzędzia → Kosz)'}.`, 'Przenieś do kosza', true)) { for (const f of (m.toggle === 'group' && m.files && m.files.length ? m.files : [m.file])) await api('mods:remove', f, ctx.g.id, m.name); delete App.state.reports[ctx.g.id]; tabMods(c, ctx); }
         };
         // wiersz klikalny → pokaż problemy moda
         tr.ondblclick = () => {
@@ -221,6 +222,7 @@ App.views = App.views || {};
     draw();
     const wsItems = rep.mods.filter(m => m.workshopId).map(m => ({ id: m.workshopId, file: m.file }));
     if (wsItems.length) App.apiQuiet('workshop:local', wsItems).then(r => { ws = r || {}; if (c.isConnected) draw(); }).catch(() => {});
+    $('[data-refresh]', c).onclick = async e => { e.currentTarget.disabled = true; delete App.state.reports[ctx.g.id]; await tabMods(c, ctx); toast('Odświeżono listę modów'); };
     $('[data-q]', c).oninput = e => { filter = e.target.value.toLowerCase(); draw(); };
     $('[data-tagf]', c).onchange = e => { tagFilter = e.target.value; draw(); };
     $('[data-open]', c).onclick = async () => { await api('fs:mkdir', target); api('shell:open', target); };
@@ -358,6 +360,9 @@ App.views = App.views || {};
       ${info.warning ? `<div class="note warn" style="margin-bottom:14px">${esc(info.warning)}</div>` : ''}
       ${info.workshop && info.workshop.length ? `<div class="field"><label>Warsztat Steam</label>${info.workshop.map(w => `<span class="path">${esc(w)}</span>`).join('<br>')}</div>` : ''}
       <div class="row" style="margin-bottom:22px"><button class="btn" data-reset>${icon('refresh')}Wykryj automatycznie</button><button class="btn" data-open>${icon('folder')}Otwórz folder</button><button class="btn" data-edit>${icon('code')}Otwórz w edytorze</button></div>
+      <h2 style="margin-bottom:6px">Folder modów</h2>
+      <p class="dim" style="font-size:12.5px;margin:0 0 12px">Jeśli trzymasz mody gdzie indziej (np. na innym dysku albo w folderze menedżera modów), wskaż go tutaj. CodeManager będzie tam instalował nowe mody i pokaże wszystko, co w nim leży – także w podfolderach.</p>
+      <div data-modsdir><div class="progress indet"><i></i></div></div>
       <h2 style="margin-bottom:12px">Uruchamianie</h2>
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">
         <div class="field"><label>Sposób uruchamiania</label><select class="input" data-l="launchMethod"><option value="auto">Automatycznie</option><option value="steam" ${gs.launchMethod === 'steam' ? 'selected' : ''}>Przez Steam</option><option value="exe" ${gs.launchMethod === 'exe' ? 'selected' : ''}>Bezpośrednio (plik .exe)</option></select></div>
@@ -369,6 +374,7 @@ App.views = App.views || {};
       ${VERSION_HINT[g.id] ? `<h2 style="margin-bottom:12px">Wersja gry</h2><div class="field"><label>Ręczna wersja (opcjonalnie)</label><div class="inline-input"><input class="input" data-ver value="${esc(gs.gameVersion || '')}" placeholder="automatycznie"><button class="btn primary" data-savever>Zapisz</button></div><span class="hint">${esc(VERSION_HINT[g.id])}</span></div>` : ''}
     </div>`);
     $('[data-change]', panel).onclick = () => changePath(g.id);
+    modsDirSection($('[data-modsdir]', panel), ctx);
     api('profiles:list', g.id, ctx.profileId || 'game').then(d => { const s2 = $('[data-lprof]', panel); s2.innerHTML += d.profiles.map(p => `<option value="${p.id}" ${gs.launchProfile === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join(''); });
     $('[data-playnow]', panel).onclick = () => App.mt.launch(g, ctx.profileId);
     $('[data-savel]', panel).onclick = async () => {
@@ -383,6 +389,21 @@ App.views = App.views || {};
     c.appendChild(panel);
   }
 
+
+  async function modsDirSection(box, ctx) {
+    const g = ctx.g; const t = await api('mods:targetInfo', g.id, ctx.profileId);
+    const save = async patch => { const saved = await api('games:settings', g.id, patch); App.state.gameConfig[g.id] = { ...(App.state.gameConfig[g.id] || {}), settings: saved }; delete App.state.reports[g.id]; modsDirSection(box, ctx); };
+    box.innerHTML = `<div class="field"><label>Główny folder modów</label><div class="inline-input"><input class="input mono" readonly value="${esc(t.override || t.default)}"><button class="btn" data-pick>${icon('folder')}Wskaż</button>${t.override ? `<button class="btn ghost" data-def title="Wróć do ${esc(t.default)}">Domyślny</button>` : ''}</div>
+        <span class="hint">${t.override ? `Własny folder. Domyślny: <span class="mono">${esc(t.default)}</span>` : 'Domyślny folder tej gry.'}</span></div>
+      <div class="field"><label>Dodatkowe foldery z modami</label><div class="extra-dirs">${t.extra.map((d, i) => `<div class="inline-input"><input class="input mono" readonly value="${esc(d)}"><button class="btn ghost icon" data-rm="${i}" title="Usuń z listy (pliki zostają)">${icon('x')}</button></div>`).join('') || '<span class="dim" style="font-size:12.5px">Brak.</span>'}</div>
+        <div class="row" style="margin-top:6px"><button class="btn sm" data-add>${icon('plus')}Dodaj folder</button></div></div>
+      <label class="check" style="margin-bottom:22px"><input type="checkbox" data-deep ${t.deepScan ? 'checked' : ''}><span>Szukaj modów w podfolderach (np. .pak w ~mods/Kategoria/Mod/)</span></label>`;
+    $('[data-pick]', box).onclick = async () => { const d = await api('dialog:folder', 'Folder modów: ' + g.name, t.override || t.default); if (d) { await save({ modsDir: d }); toast('Ustawiono folder modów'); } };
+    const def = $('[data-def]', box); if (def) def.onclick = () => save({ modsDir: null });
+    $('[data-add]', box).onclick = async () => { const d = await api('dialog:folder', 'Dodatkowy folder z modami'); if (d && !t.extra.includes(d)) await save({ extraModDirs: [...t.extra, d] }); };
+    $$('[data-rm]', box).forEach(b => b.onclick = () => save({ extraModDirs: t.extra.filter((_, i) => i !== +b.dataset.rm) }));
+    $('[data-deep]', box).onchange = e => save({ deepScan: e.target.checked });
+  }
 
   // ---------- streszczenie dla laika ----------
   function summaryBox(sum, rep, target, rerun) {

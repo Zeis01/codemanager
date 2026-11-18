@@ -1,5 +1,29 @@
 # Historia zmian
 
+## CodeManager 1.8.1
+
+### Mody
+- **Przycisk „Odśwież” w zakładce Mody każdej gry:** wczytuje listę od nowa, np. po wrzuceniu plików do folderu poza programem.
+- **Własny folder modów w ustawieniach gry:**
+  - jeśli mody leżą gdzie indziej (inny dysk, folder menedżera modów), można wskazać główny folder – tam trafiają też nowe instalacje – i dowolną liczbę folderów dodatkowych;
+  - przycisk „Domyślny” przywraca folder gry.
+- **Wykrywanie modów w podfolderach:**
+  - CodeManager przeszukuje folder modów razem z podfolderami (np. `~mods/Auta/Ferrari/Ferrari_P.pak`) i pokazuje mody, których wcześniej nie było na liście: paczki .pak z .ucas/.utoc jako jeden mod, a także .vpk, .gma, .esp/.esm/.esl, .ba2/.bsa, .asi, .jar, .dll, .scs, .rpf, .oiv i inne;
+  - w kolumnie „Źródło” widać, w którym podfolderze leży mod; można go włączać, wyłączać i usuwać;
+  - skanowanie podfolderów da się wyłączyć w ustawieniach gry;
+  - gry, w których folder modów jest folderem z plikami gry (np. Skyrim Data, GTA V), skanuje się tylko we wskazanych folderach.
+
+### Edytor bloczkowy – 39 nowych bloczków (razem 106)
+- **FiveM / RedM:** gracz napisał na czacie, lista graczy, licencja gracza, daj broń, teleportuj gracza, stwórz pojazd przy graczu.
+- **Garry's Mod:** gracz zginął (ofiara i zabójca), gracz wyszedł, lista graczy, czy admin, SteamID, zabij, wyrzuć, ustaw pancerz.
+- **BeamMP:** gracz wyszedł, gracz zespawnował pojazd, usuń pojazd, czy gość.
+- **Matematyka i logika:** mniejsza/większa z dwóch, potęga, wartość bezwzględna, pierwiastek, zaokrąglenie w dół, „wybierz” (jeżeli A, to B, inaczej C).
+- **Tekst:** małe litery, usuwanie spacji, fragment, zamiana, podział na listę, „zaczyna się od”, zamiana na liczbę.
+- **Listy:** pusta lista, dodaj do listy, losowy element, „lista zawiera”, połącz w tekst.
+- **Czas:** obecny czas w sekundach, godzina.
+- **Pliki** (Lua, Python, JavaScript): dopisz do pliku, zawartość pliku.
+- Wszystkie nowe bloczki generują kod we wszystkich obsługiwanych językach. Sprawdzanie pilnuje, żeby bloczki z innej gry albo z drugiej strony skryptu (serwer/klient) były oznaczone jako błąd.
+
 ## CodeManager 1.8.0
 
 ### Edytor bloczkowy (nowy widok)

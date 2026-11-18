@@ -128,7 +128,7 @@ handle('mods:online', (id, profileId) => {
   return compat.online(id, info, prof, (config.games[id] || {}).settings || {});
 });
 handle('mods:toggle', (mod, gameId) => compat.toggle(mod, { gameId, gamePath: gameId && detected && detected.games[gameId] ? detected.games[gameId].path : null }));
-handle('mods:target', (id, profileId) => { const info = infoFor(id); const prof = compat.profiles(id, info).find(p => p.id === profileId); return compat.modsTarget(id, prof, info); });
+handle('mods:target', (id, profileId) => { const info = infoFor(id); const prof = compat.profiles(id, info).find(p => p.id === profileId); return compat.modsTarget(id, prof, info, (config.games[id] || {}).settings); });
 handle('mods:add', (targetDir, files) => {
   fs.mkdirSync(targetDir, { recursive: true });
   const done = [];
@@ -139,6 +139,7 @@ handle('mods:add', (targetDir, files) => {
   }
   return done;
 });
+handle('mods:targetInfo', (id, profileId) => { const info = infoFor(id); const prof = compat.profiles(id, info).find(p => p.id === profileId); const gs = (config.games[id] || {}).settings || {}; return { default: compat.modsTarget(id, prof, info), override: gs.modsDir || null, extra: gs.extraModDirs || [], deepScan: gs.deepScan !== false }; });
 handle('mods:remove', async (p, gameId, label) => { if (config.settings.programTrash === false) { await shell.trashItem(p); return { system: true }; } return trash.put(p, { gameId: gameId || null, label }); });
 
 // Instalatory
@@ -269,7 +270,7 @@ function profileCtx(gameId, profileId) {
   const info = infoFor(gameId);
   const prof = compat.profiles(gameId, info).find(p => p.id === profileId) || compat.profiles(gameId, info)[0];
   const gs = (config.games[gameId] || {}).settings || {};
-  return { info, prof, root: prof ? prof.root : info.path, modsDir: compat.modsTarget(gameId, prof, info), mcVersion: gs.mcVersion || (prof && prof.mcVersion), loader: gs.loader || (prof && prof.loader) };
+  return { info, prof, root: prof ? prof.root : info.path, modsDir: compat.modsTarget(gameId, prof, info, gs), mcVersion: gs.mcVersion || (prof && prof.mcVersion), loader: gs.loader || (prof && prof.loader) };
 }
 function serverCtx(serverId) {
   const s = servers.get(serverId);

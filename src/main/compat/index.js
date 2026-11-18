@@ -22,7 +22,8 @@ function profiles(gameId, info) {
 }
 
 // Folder, do którego trafiają mody dodawane przez użytkownika
-function modsTarget(gameId, profile, info) {
+function modsTarget(gameId, profile, info, settings) {
+  if (settings && settings.modsDir && byId(gameId).checker !== 'minecraft') return settings.modsDir;
   const root = profile ? profile.root : info.path;
   switch (byId(gameId).checker) {
     case 'minecraft': return path.join(root, 'mods');
@@ -62,6 +63,11 @@ function modsTarget(gameId, profile, info) {
 }
 
 function check(gameId, info, profile, settings = {}) {
+  const rep = checkRaw(gameId, info, profile, settings);
+  const game = byId(gameId);
+  try { return require('./folderscan').augment(rep, { checker: game.checker, target: modsTarget(gameId, profile, info), gamePath: info.path, settings }); } catch { return rep; }
+}
+function checkRaw(gameId, info, profile, settings = {}) {
   const game = byId(gameId);
   if (!info || !info.found) throw new Error('Gra nie została znaleziona – wskaż jej lokalizację.');
   const ctx = { game, info, gamePath: info.path, workshop: info.workshop || [], settings, root: profile ? profile.root : info.path, profileName: profile ? profile.name : 'Folder gry' };
