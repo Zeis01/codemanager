@@ -41,6 +41,8 @@ jobs:
       - run: npm test
 
       - name: Zbuduj i opublikuj (instalator, portable, zip + latest.yml)
-        run: npx electron-builder --win nsis portable zip --publish always -c.releaseInfo.releaseNotesFile=release-notes.md
+        run: |
+          NAME=$(node -p "'CodeManager ' + require('./package.json').version.replace(/-(\\d+)$/, '.\$1')")
+          npx electron-builder --win nsis portable zip --publish always -c.releaseInfo.releaseNotesFile=release-notes.md -c.releaseInfo.releaseName="$NAME"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

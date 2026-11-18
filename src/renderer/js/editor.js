@@ -49,12 +49,13 @@ App.views = App.views || {};
         <div class="ed-host"><div class="ed-welcome"><div><h2>Edytor CodeManager</h2><p>Otwórz folder gry lub serwera, aby edytować pliki konfiguracyjne i skrypty.</p>
           <button class="btn primary" data-openfolder>${icon('folderOpen')}Otwórz folder</button>
           <div class="keys"><span class="kbd">Ctrl+S</span><span>Zapisz</span><span class="kbd">Ctrl+P</span><span>Szybkie otwieranie pliku</span><span class="kbd">Ctrl+Shift+F</span><span>Szukaj w plikach</span><span class="kbd">Ctrl+F / Ctrl+H</span><span>Znajdź / zamień</span><span class="kbd">Ctrl+Spacja</span><span>Podpowiedzi i snippety</span><span class="kbd">Alt+Shift+F</span><span>Formatuj (JSON)</span></div></div></div></div>
-        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><button data-st-diff title="Porównaj z wersją zapisaną na dysku">Porównaj</button><button data-st-tree title="Podgląd struktury pliku (JSON, TOML, YAML, INI)">Struktura</button><span data-st-prob></span><span data-st-pos></span><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
+        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><button data-st-diff title="Porównaj z wersją zapisaną na dysku">Porównaj</button><button data-st-tree title="Podgląd struktury pliku (JSON, TOML, YAML, INI)">Struktura</button><span data-st-prob></span><span data-st-pos></span><button data-st-luaapi class="hidden" title="Podpowiedzi Lua dla gry – kliknij, aby zmienić"></button><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
       </div></div>`);
     S.el = el;
     $$('[data-side]', el).forEach(b => b.onclick = () => { if (S.side === b.dataset.side && S.sideOpen) { S.sideOpen = false; } else { S.side = b.dataset.side; S.sideOpen = true; } renderSide(); });
     $('[data-openfolder]', el).onclick = openFolderDialog;
     $('[data-st-lang]', el).onclick = pickLanguage;
+    $('[data-st-luaapi]', el).onclick = pickLuaApi;
     $('[data-st-tree]', el).onclick = structurePreview;
     $('[data-st-diff]', el).onclick = () => { const t = S.tabs.find(x => x.path === S.active); if (t && !t.untitled) diffWithDisk(t); };
     return el;
@@ -217,6 +218,33 @@ App.views = App.views || {};
       };
       body.appendChild(b);
     }
+  }
+
+  // ---------- profil podpowiedzi Lua (FiveM, BeamMP, Garry's Mod…) ----------
+  async function updateLuaApi(t) {
+    const b = $('[data-st-luaapi]', S.el);
+    if (!t || t.model.getLanguageId() !== 'lua' || !window.EditorComplete) { b.classList.add('hidden'); return; }
+    const pr = await EditorComplete.profileFor(t.model);
+    const meta = EditorComplete.LUA_PROFILES.find(x => x.id === pr.id);
+    b.textContent = 'API Lua: ' + (meta ? meta.name.replace(/\s*\(.*\)$/, '') : 'czysta Lua');
+    b.title = `Podpowiedzi Lua: ${meta ? meta.name : 'tylko biblioteka standardowa'} (${pr.how}). Kliknij, aby zmienić.`;
+    b.classList.remove('hidden');
+    if (meta) EditorComplete.loadProfile(pr.id).then(db => { if (!db && meta.local) b.title += ' – nie znaleziono plików gry.'; });
+  }
+  async function pickLuaApi() {
+    const t = S.tabs.find(x => x.path === S.active); if (!t) return;
+    const cur = await EditorComplete.profileFor(t.model);
+    const dir = t.untitled ? null : P().dirname(t.path);
+    const ovr = t.untitled ? null : EditorComplete.overrideFor(t.path);
+    const opts = [{ id: '', name: 'Automatycznie (wykrywanie po plikach i treści)' }, { id: 'lua', name: 'Czysta Lua (bez API gry)' }, ...EditorComplete.LUA_PROFILES];
+    const body = h(`<div><p class="muted" style="margin-top:0">Wybierz grę, dla której edytor ma podpowiadać funkcje. Teraz: <b>${esc((EditorComplete.LUA_PROFILES.find(x => x.id === cur.id) || { name: 'czysta Lua' }).name)}</b> (${esc(cur.how)}).</p>
+      <div class="luaapi-list">${opts.map(o => `<label class="check"><input type="radio" name="luaapi" value="${o.id}" ${(ovr || '') === o.id ? 'checked' : ''}><span>${esc(o.name)}</span></label>`).join('')}</div>
+      ${dir ? `<p class="dim" style="font-size:12.5px;margin-bottom:0">Wybór zostanie zapamiętany dla folderu <span class="mono">${esc(dir)}</span> i jego podfolderów. Domyślne zachowanie zmienisz w Ustawieniach → Edytor.</p>` : ''}</div>`);
+    modal({ title: 'Podpowiedzi Lua dla gry', body, actions: [{ label: 'Anuluj' }, { label: 'Zastosuj', primary: true, onClick: () => {
+      const v = ($('input[name=luaapi]:checked', body) || {}).value || '';
+      if (dir) EditorComplete.setOverride(dir, v || null);
+      updateLuaApi(t); toast(v ? 'Podpowiedzi: ' + opts.find(o => o.id === v).name : 'Podpowiedzi: wykrywanie automatyczne');
+    } }] });
   }
 
   // ---------- zakładki i pliki ----------
@@ -393,6 +421,7 @@ App.views = App.views || {};
     const t = S.tabs.find(x => x.path === S.active);
     $('[data-st-file]', S.el).textContent = t ? (isDirty(t) ? '● ' : '') + t.name : 'Brak pliku';
     $('[data-st-lang]', S.el).textContent = t ? t.model.getLanguageId() : '';
+    updateLuaApi(t);
     $('[data-st-enc]', S.el).textContent = t ? (t.bom ? 'UTF-8 z BOM' : 'UTF-8') : '';
     $('[data-st-eol]', S.el).textContent = t ? t.eol : '';
     if (!t) { $('[data-st-pos]', S.el).textContent = ''; }

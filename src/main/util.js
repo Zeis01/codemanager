@@ -109,8 +109,10 @@ async function regQuery(key, value) {
 function parseVer(v) {
   if (v == null) return null;
   const s = String(v).trim().replace(/^v/i, '');
-  const [main, pre] = s.split(/-(.*)/s);
+  let [main, pre] = s.split(/-(.*)/s);
   const nums = main.split('+')[0].split('.').map(x => { const n = parseInt(x, 10); return isNaN(n) ? 0 : n; });
+  // „1.7.1-5” (npm wymaga trzech liczb) = wersja 1.7.1.5
+  if (pre && /^\d+$/.test(pre)) { nums.push(parseInt(pre, 10)); pre = null; }
   return { nums, pre: pre || null, raw: s };
 }
 function cmpVer(a, b) {
@@ -127,6 +129,8 @@ function cmpVer(a, b) {
   return 0;
 }
 
+// wersja do wyświetlania: 1.7.1-5 → 1.7.1.5
+function dispVer(v) { return String(v || '').replace(/-(\d+)$/, '.$1'); }
 function safeName(s) { return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'serwer'; }
 
 function copyRecursive(src, dst, { backupDir, rootForBackup } = {}) {
@@ -149,5 +153,5 @@ function copyRecursive(src, dst, { backupDir, rootForBackup } = {}) {
 module.exports = {
   isWin, isMac, exists, isDir, isFile, readText, readJSON, writeJSON, listDir, listDirs, listFiles, walk,
   firstExisting, home, documents, documentsCandidates, appData, localAppData, run, regQuery, parseVer, cmpVer,
-  safeName, copyRecursive,
+  safeName, dispVer, copyRecursive,
 };

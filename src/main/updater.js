@@ -13,7 +13,7 @@ const N = require('./net');
 class Updater {
   constructor({ app, getSettings, emit, repo }) {
     Object.assign(this, { app, getSettings, emit, fixedRepo: repo });
-    this.state = { state: 'idle', current: app.getVersion() };
+    this.state = { state: 'idle', current: U.dispVer(app.getVersion()) };
     this.timer = null;
     this.au = null;
   }
@@ -28,13 +28,13 @@ class Updater {
   }
   // Zdarzenie wysyłane tylko przy faktycznej zmianie stanu (bez tego odczyt stanu w interfejsie wywoływał pętlę)
   set(patch) {
-    const next = { ...this.state, ...patch, current: this.app.getVersion(), mode: this.mode(), repo: this.repo() };
+    const next = { ...this.state, ...patch, current: U.dispVer(this.app.getVersion()), mode: this.mode(), repo: this.repo() };
     const changed = JSON.stringify(next) !== JSON.stringify(this.state);
     this.state = next;
     if (changed) this.emit('update:status', this.state);
     return this.state;
   }
-  status() { return { ...this.state, current: this.app.getVersion(), mode: this.mode(), repo: this.repo() }; }
+  status() { return { ...this.state, current: U.dispVer(this.app.getVersion()), mode: this.mode(), repo: this.repo() }; }
 
   schedule() {
     clearInterval(this.timer);
@@ -84,6 +84,8 @@ class Updater {
       if (this.mode() === 'installer') {
         const au = this.autoUpdater();
         au.allowPrerelease = false;
+        // wersje typu 1.7.1.5 zapisane jako 1.7.1-5 – semver uznałby je za starsze; o tym, czy wersja jest nowsza, decyduje U.cmpVer powyżej
+        au.allowDowngrade = true;
         au.setFeedURL(this.feed());
         await au.checkForUpdates();
       }

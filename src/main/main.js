@@ -77,7 +77,7 @@ function handle(ch, fn) {
 handle('win:minimize', () => win.minimize());
 handle('win:maximize', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
 handle('win:close', () => win.close());
-handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, userData, electron: process.versions.electron }));
+handle('app:info', () => ({ version: U.dispVer(app.getVersion()), platform: process.platform, userData, electron: process.versions.electron }));
 
 // Ustawienia
 handle('config:get', () => ({ settings: config.settings, games: config.games }));
@@ -888,7 +888,7 @@ handle('report:build', async ({ target, analysis, file }) => {
     try { rep = await work('serverCheck', { server: servers.get(target.serverId) }); } catch { rep = null; }
   }
   if (file) { try { logTail = String(file).startsWith('console:') ? servers.getLog(file.slice(8)).slice(-80).join('\n') : analyzer.readTail(file, 64 * 1024); } catch { /* */ } }
-  return reportTxt.build({ appVersion: app.getVersion(), electron: process.versions.electron, target: t, report: rep, analysis, file: file && !String(file).startsWith('console:') ? file : null, logTail });
+  return reportTxt.build({ appVersion: U.dispVer(app.getVersion()), electron: process.versions.electron, target: t, report: rep, analysis, file: file && !String(file).startsWith('console:') ? file : null, logTail });
 });
 handle('report:save', async text => { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('desktop'), `raport-codemanager-${new Date().toISOString().slice(0, 10)}.md`), filters: [{ name: 'Tekst', extensions: ['md', 'txt'] }] }); if (r.canceled) return null; fs.writeFileSync(r.filePath, text, 'utf8'); return r.filePath; });
 
@@ -1346,3 +1346,9 @@ handle('py:status', () => pyIntel.status());
 handle('py:modules', () => pyIntel.modules());
 handle('py:members', paths => pyIntel.members(paths));
 handle('py:reset', () => { pyIntel.clear(); return pyIntel.status(); });
+
+// ---------- Edytor: profile podpowiedzi Lua (FiveM, BeamMP, Garry's Mod…) ----------
+const luaApi = require('./editor/luaapi');
+handle('luaapi:detect', file => luaApi.detect(file));
+handle('luaapi:load', id => luaApi.load(id));
+handle('luaapi:local', id => { const g = detected && detected.games && detected.games[id]; return luaApi.localDefs(id, g && g.found ? g.path : null); });

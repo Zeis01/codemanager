@@ -1,5 +1,37 @@
 # Historia zmian
 
+## CodeManager 1.7.1.5
+
+### Edytor: podpowiedzi Lua dla gier
+- **Profile API Lua dla gier:**
+
+  | Gra | Zakres | Źródło |
+  |---|---|---|
+  | FiveM | ok. 10 000 natywnych funkcji, środowisko CFX (Citizen, eventy, json, msgpack) | docs.fivem.net |
+  | RedM | ok. 7 500 natywnych funkcji RDR2 i funkcje serwera CFX | — |
+  | BeamMP | API serwera 3.x (MP, Util, FS, zdarzenia) i API klienta (MPVehicleGE, MPGameNetwork…) | — |
+  | Garry's Mod | ok. 9 500 funkcji, klasy z dziedziczeniem (Player → Entity), hooki | wiki.facepunch.com |
+  | MTA:SA | ok. 1 300 funkcji serwera i klienta, ponad 200 zdarzeń | — |
+  | Project Zomboid | API Javy, zdarzenia, Lua gry | Umbrella |
+  | Don't Starve Together | — | LuaCATS |
+  | Factorio | pełne API, łańcuchy typów (np. game.players[1].) i defines | — |
+  | Stormworks | dodatki | — |
+  | Teardown | definicje z pliku gry data/script_defs.lua | — |
+
+- **Opisy z dokumentacji:** każda funkcja ma sygnaturę, opis, opisy parametrów i oznaczenie strony (serwer / klient / wspólne). Funkcje drugiej strony są niżej na liście. Przestarzałe funkcje są przekreślone.
+- **Rozumienie typów:**
+  - wynik funkcji (`local p = LocalPlayer()` → `p:` pokazuje metody gracza);
+  - pętle `for _, ply in ipairs(player.GetAll())`;
+  - parametry funkcji obsługi zdarzeń (`hook.Add("PlayerSpawn", …, function(ply)`);
+  - adnotacje `---@param` i `---@type`.
+- **Nazwy zdarzeń w tekście:** `AddEventHandler("…`, `hook.Add("…`, `MP.RegisterEvent("…`, `addEventHandler("…`.
+- **Automatyczne wykrywanie gry** po plikach w folderze (fxmanifest.lua – FiveM/RedM, meta.xml – MTA, info.json – Factorio, modinfo.lua – DST, mod.info – Project Zomboid, addon.json – Garry's Mod), po ścieżce (np. Resources/Server dla BeamMP) albo po treści pliku.
+- **Przełącznik „API Lua” na pasku stanu edytora:** wybór gry zapamiętywany dla folderu. Domyślne zachowanie ustawisz w Ustawieniach → Edytor.
+- Generator baz (tools/lua-api/build.js) pozwala odświeżyć je po aktualizacjach gier.
+
+### Wersja
+- Numer 1.7.1.5 jest zapisany w package.json jako 1.7.1-5, bo npm wymaga trzech liczb. CodeManager wyświetla i porównuje go jako 1.7.1.5, a aktualizacja z 1.7.1 działa normalnie.
+
 ## CodeManager 1.7.1
 
 ### Edytor: podpowiedzi podczas pisania
