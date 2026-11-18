@@ -1336,3 +1336,13 @@ handle('workshop:download', async (jobId, gameId, profileId, id) => {
   log(`✔ Skopiowano do ${ctx.modsDir}`);
   return { name: det ? det.title : id, paths };
 });
+
+// =====================================================================
+// Edytor: podpowiedzi Pythona z interpretera na komputerze
+// =====================================================================
+const { PyIntel } = require('./editor/python');
+const pyIntel = new PyIntel({ cacheFile: path.join(userData, 'python-intel.json'), getSetting: k => config.settings[k] });
+handle('py:status', () => pyIntel.status());
+handle('py:modules', () => pyIntel.modules());
+handle('py:members', paths => pyIntel.members(paths));
+handle('py:reset', () => { pyIntel.clear(); return pyIntel.status(); });

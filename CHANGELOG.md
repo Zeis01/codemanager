@@ -1,5 +1,23 @@
 # Historia zmian
 
+## CodeManager 1.7.1
+
+### Edytor: podpowiedzi podczas pisania
+- **Python, jak w VS Code:** po wpisaniu `time.`, `os.path.` czy `json.` pojawia się lista funkcji, klas, modułów i stałych z ikonami. Przy pozycjach widać:
+  - sygnaturę funkcji;
+  - opis z dokumentacji;
+  - wartość stałej (np. `altzone  int = -7200`).
+- **Podpowiedzi z Pythona na komputerze:** CodeManager pyta zainstalowanego Pythona (py / python), więc podpowiedzi obejmują też pakiety z pip (np. requests, discord, pygame). Wyniki trafiają do pamięci podręcznej. Bez Pythona działa wbudowana baza biblioteki standardowej (ok. 90 modułów oraz metody str, list i dict).
+- **Rozumienie pliku:**
+  - importy z aliasami (`import json as js`, `from os import path`);
+  - klasy z metodami i polami `self.`, także dziedziczone;
+  - zmienne z typem rozpoznanym z przypisania (tekst, lista, słownik, `open()`, obiekt klasy);
+  - podpowiedzi po `import` i `from x import`.
+- **Podpowiedź parametrów** po wpisaniu `(` oraz **opis po najechaniu** na funkcję lub moduł.
+- **Lua:** biblioteka standardowa (string, table, math, os, io, coroutine, utf8, debug), funkcje globalne, słowa kluczowe, a także tabele, funkcje i metody (`M.`, `M:`) zdefiniowane w pliku. Metody tekstu działają po `s:`.
+- Podpowiedzi nie pokazują się w komentarzach, a szablony kodu nie wyskakują po kropce.
+- **Ustawienia → Edytor:** podpowiedzi można wyłączyć (Ctrl+Spacja nadal działa) i wskazać własny Python (przycisk „Sprawdź”).
+
 ## CodeManager 1.7.0
 
 ### Nowe gry ze sprawdzaniem zgodności

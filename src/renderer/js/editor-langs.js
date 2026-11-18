@@ -121,6 +121,8 @@ window.EditorLangs = (function () {
     const snip = (lang, items) => { items.forEach(([l, , t]) => { (SNIPS[lang] = SNIPS[lang] || {})[l] = t; }); return monaco.languages.registerCompletionItemProvider(lang, {
       provideCompletionItems: (model, pos) => {
         const w = model.getWordUntilPosition(pos);
+        // po kropce/dwukropku (obiekt.metoda) szablony nie mają sensu
+        if (/[.:]$/.test(model.getLineContent(pos.lineNumber).slice(0, w.startColumn - 1))) return { suggestions: [] };
         const range = { startLineNumber: pos.lineNumber, endLineNumber: pos.lineNumber, startColumn: w.startColumn, endColumn: w.endColumn };
         return { suggestions: items.map(([label, detail, text]) => ({ label, detail, documentation: detail, kind: S, insertText: text, insertTextRules: R, range })) };
       },

@@ -28,6 +28,8 @@ App.views.settings = {
           <div class="field"><label>Rozmiar czcionki</label><input class="input" type="number" data-k="editorFontSize" value="${esc(s.editorFontSize || 14)}" min="10" max="28"></div>
           <label class="check" style="margin-bottom:10px"><input type="checkbox" data-k="editorMinimap" ${s.editorMinimap !== false ? 'checked' : ''}><span>Minimapa</span></label>
           <label class="check" style="margin-bottom:10px"><input type="checkbox" data-k="editorWrap" ${s.editorWrap ? 'checked' : ''}><span>Zawijanie wierszy</span></label>
+          <label class="check" style="margin-bottom:10px"><input type="checkbox" data-k="editorSuggest" ${s.editorSuggest !== false ? 'checked' : ''}><span>Podpowiedzi podczas pisania (Python, Lua, JavaScript…)</span></label>
+          <div class="field"><label>Python do podpowiedzi (opcjonalnie)</label><div class="inline-input"><input class="input mono" data-k="pythonPath" value="${esc(s.pythonPath || '')}" placeholder="wykrywany automatycznie (py, python)"><button class="btn" data-pycheck>${icon('search')}Sprawdź</button></div><span class="hint" data-pyres>Podpowiedzi modułów (np. time., os.path.) pochodzą z Pythona na tym komputerze – także dla doinstalowanych pakietów. Bez Pythona działa wbudowana baza biblioteki standardowej.</span></div>
           <label class="check"><input type="checkbox" data-k="editorAutosave" ${s.editorAutosave ? 'checked' : ''}><span>Autozapis po 1 s bezczynności</span></label>
           <h2 style="margin:24px 0 10px">Aktualizacje programu</h2>
           <div data-upd></div>
@@ -103,6 +105,12 @@ App.views.settings = {
     };
     $$('[data-b]', el).forEach(b => b.onclick = async () => { const p = await api('dialog:folder'); if (p) $(`[data-k="${b.dataset.b}"]`, el).value = p; });
     $('[data-ud]', el).onclick = () => api('shell:open', info.userData);
+    $('[data-pycheck]', el).onclick = async () => {
+      const r = $('[data-pyres]', el); r.textContent = 'Sprawdzam…';
+      App.state.settings = await api('settings:set', { pythonPath: $('[data-k="pythonPath"]', el).value.trim() });
+      const st = await api('py:reset'); if (window.EditorComplete) EditorComplete.reset();
+      r.textContent = st.found ? `Znaleziono Python ${st.version} (${st.cmd}) – podpowiedzi obejmą też pakiety zainstalowane przez pip.` : 'Nie znaleziono Pythona. Podpowiedzi korzystają z wbudowanej bazy biblioteki standardowej. Python pobierzesz z python.org.';
+    };
     $('[data-java]', el).onclick = async () => {
       const r = $('[data-javares]', el); r.textContent = 'Szukam…';
       const list = await api('java:list');
@@ -217,7 +225,10 @@ App.views.settings = {
       const patch = {};
       $$('[data-k]', el).forEach(i => { patch[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });
       if (patch.language) localStorage.setItem('cm-lang', patch.language);
+      const pyChanged = (App.state.settings.pythonPath || '') !== (patch.pythonPath || '');
       App.state.settings = await api('settings:set', patch);
+      if (pyChanged) { await api('py:reset'); if (window.EditorComplete) EditorComplete.reset(); }
+      if (App.applyEditorSettings) App.applyEditorSettings();
       toast('Zapisano ustawienia');
     }
   },

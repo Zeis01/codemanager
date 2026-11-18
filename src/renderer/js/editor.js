@@ -19,7 +19,13 @@ App.views = App.views || {};
       sc.src = base + '/vs/loader.js';
       sc.onload = () => {
         window.require.config({ paths: { vs: base + '/vs' } });
-        window.require(['vs/editor/editor.main'], () => { S.monaco = window.monaco; EditorLangs.register(window.monaco); Themes.applyMonaco(window.monaco); res(window.monaco); }, rej);
+        window.require(['vs/editor/editor.main'], () => {
+          S.monaco = window.monaco; EditorLangs.register(window.monaco); Themes.applyMonaco(window.monaco);
+          // baza podpowiedzi Pythona wczytywana dopiero z edytorem
+          const db = document.createElement('script'); db.src = 'js/editor-pydb.js'; document.head.appendChild(db);
+          EditorComplete.register(window.monaco);
+          res(window.monaco);
+        }, rej);
       };
       sc.onerror = () => rej(new Error('Nie udało się wczytać edytora Monaco'));
       document.head.appendChild(sc);
@@ -223,8 +229,11 @@ App.views = App.views || {};
     S.editor = monaco.editor.create(box, {
       theme: 'codemanager', automaticLayout: true, fontFamily: "'JBMono', 'Cascadia Code', Consolas, monospace", fontSize: st.editorFontSize || 14, fontLigatures: true,
       minimap: { enabled: st.editorMinimap !== false }, wordWrap: st.editorWrap ? 'on' : 'off', smoothScrolling: true, cursorBlinking: 'smooth', cursorSmoothCaretAnimation: 'on',
+      quickSuggestions: st.editorSuggest === false ? false : { other: true, comments: false, strings: false }, suggestOnTriggerCharacters: st.editorSuggest !== false,
+      wordBasedSuggestions: 'matchingDocuments', suggest: { preview: true, showWords: true, showStatusBar: true, insertMode: 'replace' }, parameterHints: { enabled: st.editorSuggest !== false },
       renderWhitespace: 'selection', bracketPairColorization: { enabled: true }, guides: { bracketPairs: true }, stickyScroll: { enabled: true }, padding: { top: 8 }, scrollBeyondLastLine: false,
     });
+    App.applyEditorSettings = () => { const x = App.state.settings; const on = x.editorSuggest !== false; S.editor.updateOptions({ fontSize: x.editorFontSize || 14, minimap: { enabled: x.editorMinimap !== false }, wordWrap: x.editorWrap ? 'on' : 'off', quickSuggestions: on ? { other: true, comments: false, strings: false } : false, suggestOnTriggerCharacters: on, parameterHints: { enabled: on } }); };
     S.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => save());
     S.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => { const t = S.tabs.find(x => x.path === S.active); if (t) closeTab(t); });
     S.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, quickOpen);

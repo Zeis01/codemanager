@@ -94,6 +94,10 @@ window.Themes = (function () {
         'editorWidget.background': hex(c.bg2), 'editorWidget.border': hex(c.line2), 'editorSuggestWidget.background': hex(c.bg2), 'editorSuggestWidget.selectedBackground': hex(c.bg4),
         'editorHoverWidget.background': hex(c.bg2), 'minimap.background': hex(c.bg1), 'editorGutter.background': hex(e.background && validColor(e.background) ? e.background : c.bg1),
         'input.background': hex(c.input), 'focusBorder': hex(c.accent), 'editorBracketMatch.border': hex(c.accent),
+        // ikony podpowiedzi jak w VS Code: funkcje fioletowe, zmienne niebieskie, klasy pomarańczowe
+        ...(light
+          ? { 'symbolIcon.functionForeground': '#652d90', 'symbolIcon.methodForeground': '#652d90', 'symbolIcon.variableForeground': '#007acc', 'symbolIcon.fieldForeground': '#007acc', 'symbolIcon.classForeground': '#d67e00', 'symbolIcon.moduleForeground': '#652d90', 'symbolIcon.constantForeground': '#007acc', 'symbolIcon.keywordForeground': '#424242' }
+          : { 'symbolIcon.functionForeground': '#b180d7', 'symbolIcon.methodForeground': '#b180d7', 'symbolIcon.variableForeground': '#75beff', 'symbolIcon.fieldForeground': '#75beff', 'symbolIcon.classForeground': '#ee9d28', 'symbolIcon.moduleForeground': '#b180d7', 'symbolIcon.constantForeground': '#75beff', 'symbolIcon.keywordForeground': '#cccccc' }),
       },
     });
     monaco.editor.setTheme('codemanager');
