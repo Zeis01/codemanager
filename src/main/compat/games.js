@@ -93,13 +93,13 @@ function checkProjectZomboid(ctx) {
 }
 
 // =============== Euro Truck Simulator 2 ===============
-function etsGameVersion(gamePath, override) {
+function etsGameVersion(gamePath, override, folder = 'Euro Truck Simulator 2') {
   if (override) return override;
-  const exe = U.firstExisting([path.join(gamePath, 'bin', 'win_x64', 'eurotrucks2.exe')]);
+  const exe = U.firstExisting([path.join(gamePath, 'bin', 'win_x64', 'eurotrucks2.exe'), path.join(gamePath, 'bin', 'win_x64', 'amtrucks.exe')]);
   const pv = exe && peVersion(exe);
   if (pv) return pv.product.split('.').slice(0, 3).join('.');
   for (const d of U.documentsCandidates()) {
-    const log = U.readText(path.join(d, 'Euro Truck Simulator 2', 'game.log.txt'), '');
+    const log = U.readText(path.join(d, folder, 'game.log.txt'), '');
     const m = log.match(/ver\.\s*(\d+\.\d+\.\d+)/i); if (m) return m[1];
   }
   return null;
@@ -121,13 +121,14 @@ function etsReadPackage(p) {
   } catch { return { broken: true }; }
 }
 function checkETS2(ctx) {
-  const rep = new Report('Euro Truck Simulator 2');
-  const gv = etsGameVersion(ctx.gamePath, ctx.settings.gameVersion);
+  const folder = (ctx.game && ctx.game.docFolder) || 'Euro Truck Simulator 2';
+  const rep = new Report(ctx.game ? ctx.game.name : folder);
+  const gv = etsGameVersion(ctx.gamePath, ctx.settings.gameVersion, folder);
   rep.meta = { 'Wersja gry': gv || 'nieznana' };
   if (!gv) rep.warn('Nie udało się ustalić wersji gry', { fix: 'Wpisz wersję gry w ustawieniach (np. 1.53.2).' });
   const items = [];
   for (const d of U.documentsCandidates()) {
-    const modDir = path.join(d, 'Euro Truck Simulator 2', 'mod');
+    const modDir = path.join(d, folder, 'mod');
     for (const e of U.listDir(modDir)) {
       const full = path.join(modDir, e.name);
       if ((e.isFile() && /\.(scs|zip)(\.disabled)?$/i.test(e.name)) || e.isDirectory()) items.push({ path: full, name: e.name, source: 'Folder mod', enabled: !/\.disabled$/i.test(e.name), toggleable: e.isFile() });

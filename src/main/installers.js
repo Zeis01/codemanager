@@ -8,8 +8,8 @@ const N = require('./net');
 const { bepinexInfo, melonInfo } = require('./compat/unity');
 
 const LOADERS = [
-  { id: 'bepinex5', name: 'BepInEx 5', games: ['lethalcompany', 'repo', 'contentwarning'], desc: 'Uniwersalny loader dla gier Unity (Mono). Pobierany z GitHub (BepInEx/BepInEx).', kind: 'folder' },
-  { id: 'melonloader', name: 'MelonLoader', games: ['schedule1'], desc: 'Loader dla gier Unity (IL2CPP i Mono). Pobierany z GitHub (LavaGang/MelonLoader).', kind: 'folder' },
+  { id: 'bepinex5', name: 'BepInEx 5', games: ['lethalcompany', 'repo', 'contentwarning', 'subnautica', 'subnauticabz'], desc: 'Uniwersalny loader dla gier Unity (Mono). Pobierany z GitHub (BepInEx/BepInEx).', kind: 'folder' },
+  { id: 'melonloader', name: 'MelonLoader', games: ['schedule1', 'phasmophobia', 'cms2021'], desc: 'Loader dla gier Unity (IL2CPP i Mono). Pobierany z GitHub (LavaGang/MelonLoader).', kind: 'folder' },
   { id: 'redloader', name: 'RedLoader', games: ['sotf'], desc: 'Loader modów dla Sons of the Forest. Pobierany z GitHub (ToniMacaroni/RedLoader).', kind: 'folder' },
   { id: 'fabric', name: 'Fabric', games: ['minecraft'], desc: 'Lekki loader modów Minecraft. Instalator z meta.fabricmc.net.', kind: 'minecraft' },
   { id: 'quilt', name: 'Quilt', games: ['minecraft'], desc: 'Fork Fabric zgodny z większością modów Fabric.', kind: 'minecraft' },
@@ -18,6 +18,12 @@ const LOADERS = [
   { id: 'tmodloader', name: 'tModLoader', games: ['terraria'], desc: 'Darmowy dodatek w Steam – instalowany przez klienta Steam.', kind: 'link', url: 'steam://install/1281930' },
   { id: 'skse', name: 'SKSE64', games: ['skyrimse'], desc: 'Skyrim Script Extender – wymagany przez większość modów z wtyczkami DLL. Pobierany z skse.silverlock.org (wersja dobierana do gry).', kind: 'folder' },
   { id: 'f4se', name: 'F4SE', games: ['fallout4'], desc: 'Fallout 4 Script Extender – pobierany z f4se.silverlock.org (wersja dobierana do gry).', kind: 'folder' },
+  { id: 'bepinex6', name: 'BepInEx 6 (IL2CPP)', games: ['amongus'], desc: 'BepInExPack przygotowany dla Among Us – pobierany z Thunderstore (BepInEx/BepInExPack_AmongUs).', kind: 'folder' },
+  { id: 'lumafly', name: 'Modding API (Lumafly)', games: ['hollowknight'], desc: 'Modding API instaluje się przez menedżer Lumafly – CodeManager otworzy jego stronę.', kind: 'link', url: 'https://themulhima.github.io/Lumafly/' },
+  { id: 'rml', name: 'Raft Mod Loader', games: ['raft'], desc: 'Raft Mod Loader pobierzesz z raftmodding.com – CodeManager otworzy stronę.', kind: 'link', url: 'https://www.raftmodding.com/loader' },
+  { id: 'asiloader', name: 'Ultimate ASI Loader', games: ['gtasa', 'gta4'], desc: 'Wczytuje mody .asi. Pobierany z GitHub (ThirteenAG/Ultimate-ASI-Loader) jako dinput8.dll.', kind: 'folder' },
+  { id: 'cleo', name: 'CLEO', games: ['gtasa'], desc: 'Biblioteka skryptów CLEO dla GTA SA 1.0 US – CodeManager otworzy cleo.li.', kind: 'link', url: 'https://cleo.li/' },
+  { id: 'fusionfix', name: 'FusionFix', games: ['gta4'], desc: 'Poprawki GTA IV (Complete Edition). Pobierany z GitHub (ThirteenAG/GTAIV.EFLC.FusionFix).', kind: 'folder' },
   { id: 'scripthookv', name: 'Script Hook V', games: ['gta5'], desc: 'Licencja zabrania redystrybucji – CodeManager otworzy oficjalną stronę dev-c.com.', kind: 'link', url: 'https://www.dev-c.com/gtav/scripthookv/' },
 ];
 
@@ -65,6 +71,12 @@ function status(id, root) {
   if (id === 'bepinex5') { const b = bepinexInfo(root); return { installed: b.installed, version: b.version }; }
   if (id === 'melonloader') { const m = melonInfo(root); return { installed: m.installed, version: m.version }; }
   if (id === 'redloader') return { installed: U.isDir(path.join(root, '_RedLoader')) };
+  if (id === 'bepinex6') { const b = bepinexInfo(root); return { installed: b.installed, version: b.version }; }
+  if (id === 'lumafly') { const m = U.firstExisting([path.join(root, 'hollow_knight_Data', 'Managed', 'Assembly-CSharp.dll')]); return { installed: m ? !!require('./parsers/binary').fileContains(m, ['ModHooks']).ModHooks : false }; }
+  if (id === 'asiloader') { const r = U.exists(path.join(root, 'GTAIV', 'GTAIV.exe')) ? path.join(root, 'GTAIV') : root; return { installed: ['dinput8.dll', 'vorbisHooked.dll', 'xlive.dll'].some(f => U.exists(path.join(r, f))) }; }
+  if (id === 'cleo') return { installed: U.exists(path.join(root, 'cleo.asi')) };
+  if (id === 'fusionfix') { const r = U.exists(path.join(root, 'GTAIV', 'GTAIV.exe')) ? path.join(root, 'GTAIV') : root; return { installed: U.listFiles(path.join(r, 'plugins')).some(f => /fusionfix\.asi$/i.test(f)) }; }
+  if (id === 'rml') return { installed: null };
   if (id === 'tmodloader') return { installed: U.exists(path.join(root, 'tModLoader.dll')) };
   if (id === 'scripthookv') return { installed: U.exists(path.join(root, 'ScriptHookV.dll')) };
   if (id === 'skse' || id === 'f4se') { const se = SE[id]; const dll = U.listFiles(root).map(f => path.basename(f)).find(f => se.dll.test(f)); return { installed: U.exists(path.join(root, se.loader)), version: dll ? dll.match(/_(\d+_\d+_\d+)\.dll$/i)[1].replace(/_/g, '.') : null }; }
@@ -142,6 +154,32 @@ async function install(id, opts, log, progress) {
     return { ok: true, version: rel.tag };
   }
 
+  if (id === 'bepinex6') {
+    const j = await N.getJSON('https://thunderstore.io/api/experimental/package/BepInEx/BepInExPack_AmongUs/');
+    log(`Pobieranie BepInExPack_AmongUs ${j.latest.version_number}…`);
+    const tmp = await N.download(j.latest.download_url, N.tempFile('BepInExPack_AmongUs.zip'), progress);
+    const names = new (require('adm-zip'))(tmp).getEntries().map(e => e.entryName.replace(/\\/g, '/'));
+    const core = names.find(n => /(^|\/)BepInEx\/core\//.test(n)); const sub = core ? core.slice(0, core.indexOf('BepInEx/core/')).replace(/\/$/, '') : '';
+    const written = N.extractZip(tmp, root, { subdir: sub || null, backupDir: backupDir(opts.userData, id) });
+    fs.mkdirSync(path.join(root, 'BepInEx', 'plugins'), { recursive: true });
+    log(`Rozpakowano ${written.length} plików. Uruchom grę raz – BepInEx 6 wygeneruje biblioteki (to potrwa).`);
+    return { ok: true, version: j.latest.version_number };
+  }
+  if (id === 'asiloader' || id === 'fusionfix') {
+    const r = U.exists(path.join(root, 'GTAIV', 'GTAIV.exe')) ? path.join(root, 'GTAIV') : root;
+    const rel = id === 'asiloader' ? await N.githubLatest('ThirteenAG/Ultimate-ASI-Loader', /^Ultimate-ASI-Loader\.zip$/i) : await N.githubLatest('ThirteenAG/GTAIV.EFLC.FusionFix', /^GTAIV\.EFLC\.FusionFix\.zip$/i);
+    log(`Pobieranie ${rel.name} (${rel.tag})…`);
+    const tmp = await N.download(rel.url, N.tempFile(rel.name), progress);
+    const bdir = backupDir(opts.userData, id);
+    if (id === 'asiloader') {
+      const z = new (require('adm-zip'))(tmp); const e = z.getEntries().find(x => /dinput8\.dll$/i.test(x.entryName));
+      if (!e) throw new Error('W archiwum nie ma dinput8.dll.');
+      const t = path.join(r, 'dinput8.dll'); if (U.exists(t)) { fs.mkdirSync(bdir, { recursive: true }); fs.copyFileSync(t, path.join(bdir, 'dinput8.dll')); }
+      fs.writeFileSync(t, e.getData()); fs.mkdirSync(path.join(r, 'scripts'), { recursive: true });
+      log('Zainstalowano dinput8.dll. Mody .asi wrzucaj do folderu gry lub scripts.');
+    } else { const w = N.extractZip(tmp, r, { backupDir: bdir }); log(`Rozpakowano ${w.length} plików FusionFix.`); }
+    return { ok: true, version: rel.tag };
+  }
   if (['fabric', 'quilt', 'forge', 'neoforge'].includes(id)) {
     const mc = opts.mcVersion; if (!mc) throw new Error('Podaj wersję Minecrafta');
     const java = opts.java || 'java';

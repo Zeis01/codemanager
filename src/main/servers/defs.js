@@ -8,6 +8,8 @@ const I = require('../installers');
 const { requiredJava } = require('../compat/minecraft');
 
 const exe = (win, nix) => (U.isWin ? win : nix);
+// folder gry Source (SourceMod/Metamod) zależnie od typu serwera
+const srcGame = s => ({ l4d2: 'left4dead2' }[s.type] || 'tf');
 
 // ---------------- SteamCMD ----------------
 function steamcmdPath(userData) {
@@ -445,20 +447,20 @@ const FRAMEWORKS = {
   },
   metamod112: {
     name: 'Metamod:Source 1.12', desc: 'Wymagany przez SourceMod.',
-    status: s => U.isDir(path.join(s.path, 'tf', 'addons', 'metamod')),
+    status: s => U.isDir(path.join(s.path, srcGame(s), 'addons', 'metamod')),
     install: async (s, ctx) => {
       const url = await alliedDrop('https://mms.alliedmods.net/mmsdrop/1.12', 'mmsource');
       const f = await N.download(url, N.tempFile(path.basename(url)), ctx.progress);
-      if (/\.zip$/.test(url)) N.extractZip(f, path.join(s.path, 'tf')); else await N.extractTar(f, path.join(s.path, 'tf'));
+      if (/\.zip$/.test(url)) N.extractZip(f, path.join(s.path, srcGame(s))); else await N.extractTar(f, path.join(s.path, srcGame(s)));
     },
   },
   sourcemod: {
-    name: 'SourceMod 1.12', desc: 'Framework pluginów dla gier Source (TF2).',
-    status: s => U.isDir(path.join(s.path, 'tf', 'addons', 'sourcemod')),
+    name: 'SourceMod 1.12', desc: 'Framework pluginów dla gier Source (TF2, Left 4 Dead 2).',
+    status: s => U.isDir(path.join(s.path, srcGame(s), 'addons', 'sourcemod')),
     install: async (s, ctx) => {
       const url = await alliedDrop('https://sm.alliedmods.net/smdrop/1.12', 'sourcemod');
       const f = await N.download(url, N.tempFile(path.basename(url)), ctx.progress);
-      if (/\.zip$/.test(url)) N.extractZip(f, path.join(s.path, 'tf')); else await N.extractTar(f, path.join(s.path, 'tf'));
+      if (/\.zip$/.test(url)) N.extractZip(f, path.join(s.path, srcGame(s))); else await N.extractTar(f, path.join(s.path, srcGame(s)));
       ctx.log('Pamiętaj: SourceMod wymaga Metamod:Source 1.12.');
     },
   },
@@ -487,4 +489,4 @@ function configFiles(server) {
   return out;
 }
 
-module.exports = { TYPES, FRAMEWORKS, configFiles, ensureSteamCmd, steamcmdUpdate, steamcmdWorkshop, mcVersions, patchGameinfo };
+module.exports = { srcGame, fivemCfg, writeIfMissing, TYPES, FRAMEWORKS, configFiles, ensureSteamCmd, steamcmdUpdate, steamcmdWorkshop, mcVersions, patchGameinfo };

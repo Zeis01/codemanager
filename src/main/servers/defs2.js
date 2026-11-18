@@ -201,6 +201,8 @@ Object.assign(TYPES.fivem, {
 Object.assign(TYPES.mta, { worlds: () => ['mods/deathmatch/internal.db', 'mods/deathmatch/registry.db', 'mods/deathmatch/acl.xml'], say: m => `say ${m}` });
 Object.assign(TYPES.beammp, { worlds: () => ['Resources/Server'] });
 
+require('./defs3');
+
 function worldPaths(s) {
   const t = TYPES[s.type];
   const list = t.worlds ? t.worlds(s) : [];

@@ -1,5 +1,56 @@
 # Historia zmian
 
+## CodeManager 1.7.0
+
+### Nowe gry ze sprawdzaniem zgodności
+- **Left 4 Dead i Left 4 Dead 2:** CodeManager czyta dodatki .vpk bezpośrednio (tytuł i wersja z addoninfo.txt) i wykrywa uszkodzone archiwa oraz konflikty, czyli dodatki zmieniające te same pliki. Konflikt skryptów jest ostrzeżeniem, konflikt modeli i dźwięków tylko informacją. W L4D2 włączanie i wyłączanie działa przez addonlist.txt, tak jak w grze. Dodatki z Warsztatu są widoczne razem z lokalnymi.
+- **Farming Simulator 17, 19, 22 i 25:** dla każdego moda sprawdzany jest modDesc.xml. CodeManager wykrywa:
+  - mody do innej części gry (po descVersion);
+  - brakujące zależności;
+  - nazwy plików, które gra pomija (np. „Mod (1).zip”);
+  - archiwa bez modDesc.xml (paczki kilku modów) i pliki .rar/.7z;
+  - duplikaty i błędy z log.txt.
+- **BeamNG.drive:**
+  - włączanie i wyłączanie modów przez db.json, tak jak w grze;
+  - wykrywanie uszkodzonych archiwów i złej struktury (dodatkowy folder w zipie);
+  - dwa mody z tym samym pojazdem lub mapą;
+  - mody nadpisujące oficjalne pojazdy.
+- **GTA: San Andreas:**
+  - rozpoznawanie wersji pliku gry: 1.0 US albo nowa wersja Steam/Rockstar, w której CLEO nie działa;
+  - sprawdzanie ASI Loadera, CLEO, Mod Loadera i SilentPatch;
+  - duplikaty modów .asi;
+  - włączanie i wyłączanie modów z folderu modloader.
+- **GTA IV:** rozpoznawanie Complete Edition i wersji 1.0.x; sprawdzanie ASI Loadera, FusionFix, ScriptHook i ScriptHookDotNet; wykrywanie przestarzałego xlive.dll.
+- **Hollow Knight:** obecność Modding API, struktura Mods/<mod>/, duplikaty bibliotek między modami, mody wyłączone w Lumafly oraz brakujące zależności i błędy z ModLog.txt.
+- **Assetto Corsa:** lista aut i torów z modów (oryginalne treści Kunos są pomijane). Sprawdzane są: data.acd, model .kn5, surfaces.ini, opisy w ui_car.json i ui_track.json oraz to, czy mod wymaga Custom Shaders Patch.
+- **American Truck Simulator:** to samo sprawdzanie co w ETS2 (manifest.sii, zgodność z wersją gry) plus Warsztat.
+- **Subnautica, Subnautica: Below Zero (BepInEx 5), Among Us (BepInEx 6 IL2CPP), Phasmophobia i Car Mechanic Simulator 2021 (MelonLoader):** sprawdzanie pluginów i loadera jak w innych grach Unity.
+
+### Nowe gry z instalacją ręczną
+- Unturned, The Forest, Raft (mody .rmod), Workers & Resources: Soviet Republic, Prison Architect, Wreckfest, My Garage, Car Mechanic Simulator 2018, Stormworks: Build and Rescue, Far Cry 3, 4, 5 i 6, Dying Light i Dying Light 2 (mody .pak bez plików gry).
+- Wszystkie nowe gry mają zakładkę „Pobierz mody” z Nexus Mods, a gry z Warsztatem także z Warsztatu Steam.
+
+### Modloadery
+- BepInEx 6 dla Among Us (z Thunderstore).
+- Ultimate ASI Loader dla GTA SA i GTA IV, FusionFix dla GTA IV (z GitHub).
+- Odnośniki do CLEO, Modding API (Lumafly) i Raft Mod Loadera.
+- BepInEx 5 dla Subnautiki oraz MelonLoader dla Phasmophobii i CMS 2021.
+
+### Nowe serwery
+- **Unturned:**
+  - instalacja przez SteamCMD;
+  - Commands.dat zapisywany z ustawień serwera: nazwa, mapa, gracze, trudność, widok, hasło, GSLT, właściciel;
+  - tryb LAN lub internetowy;
+  - frameworki RocketMod (wbudowany) i OpenMod;
+  - dodawanie modów z Warsztatu (wpis do WorkshopDownloadConfig.json, serwer pobiera je sam);
+  - sprawdzanie pluginów i tokenu GSLT;
+  - akcje na graczach.
+- **Left 4 Dead 2:** instalacja przez SteamCMD, gotowy server.cfg (tryb gry, trudność, grupa Steam), RCON, Metamod:Source i SourceMod, sprawdzanie pluginów .smx, szablon „L4D2 + Metamod + SourceMod”.
+- **RedM:**
+  - serwer FXServer dla Red Dead Redemption 2 z gamename rdr3 i sessionmanager-rdr3;
+  - sprawdzanie zasobów: brak rdr3_warning i zasoby FiveM wrzucone na serwer RedM.
+- Szablony „Unturned + RocketMod” i „Unturned + OpenMod”, porty do przekierowania i ikony dla nowych serwerów.
+
 ## CodeManager 1.6.2
 
 ### Pobieranie modów

@@ -483,7 +483,7 @@ handle('analyzer:serverCandidates', id => {
   add('Log serwera', path.join(s.path, 'logs', 'server.log'));
   newest(path.join(s.path, 'oxide', 'logs')).slice(0, 2).forEach(f => add('Log Oxide', f));
   newest(path.join(s.path, 'carbon', 'logs')).slice(0, 2).forEach(f => add('Log Carbon', f));
-  newest(path.join(s.path, 'tf', 'addons', 'sourcemod', 'logs'), /^errors_/).slice(0, 2).forEach(f => add('Błędy SourceMod', f));
+  newest(path.join(s.path, require('./servers/defs').srcGame(s), 'addons', 'sourcemod', 'logs'), /^errors_/).slice(0, 2).forEach(f => add('Błędy SourceMod', f));
   newest(path.join(s.path, 'game', 'csgo', 'addons', 'counterstrikesharp', 'logs')).slice(0, 2).forEach(f => add('Log CounterStrikeSharp', f));
   newest(path.join(s.path, 'profiles'), /\.(RPT|ADM|log)$/i).slice(0, 2).forEach(f => add('Log DayZ', f));
   newest(path.join(s.path, 'profile', 'logs')).slice(0, 1).forEach(d => add('Log Reforger', d));

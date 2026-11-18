@@ -16,6 +16,8 @@ const PATTERNS = {
   mta: { join: /CONNECT: (\S+) connected/, leave: /QUIT: (\S+) left the game/, chat: /^CHAT: (\S+): (.*)$/ },
   cs2: { join: /"(.+?)<\d+><[^>]*><[^>]*>" connected/, leave: /"(.+?)<\d+><[^>]*><[^>]*>" disconnected/, chat: /"(.+?)<\d+><[^>]*><[^>]*>" say "(.*)"/ },
   tf2: { join: /"(.+?)<\d+><[^>]*><[^>]*>" connected/, leave: /"(.+?)<\d+><[^>]*><[^>]*>" disconnected/, chat: /"(.+?)<\d+><[^>]*><[^>]*>" say "(.*)"/ },
+  l4d2: { join: /"(.+?)<\d+><[^>]*><[^>]*>" connected/, leave: /"(.+?)<\d+><[^>]*><[^>]*>" disconnected/, chat: /"(.+?)<\d+><[^>]*><[^>]*>" say "(.*)"/ },
+  unturned: { join: /Connecting: PlayerID: \d+ Name: (.+?) Character:/, leave: /Disconnecting: PlayerID: \d+ Name: (.+?)(?: Character:|$)/, chat: /^\[(?:World|Area|Group)\] (.+?): (.*)$/ },
   valheim: { count: /Connections (\d+) ZDOS/, join: /Got character ZDOID from (.+?) :/ },
   satisfactory: { join: /Join succeeded: (.+)$/, leave: /UNetConnection::Close.*?Name: (.+?),/ },
 };
@@ -47,6 +49,8 @@ const ACTIONS = {
   cs2: { kick: n => `kick ${q(n)}`, list: 'status' },
   tf2: { kick: n => `kick ${q(n)}`, list: 'status' },
   mta: { kick: n => `kick ${n}`, ban: n => `ban ${n}`, list: 'players' },
+  l4d2: { kick: n => `kick ${q(n)}`, list: 'status' },
+  unturned: { kick: n => `kick ${n}`, ban: n => `ban ${n}`, pardon: n => `unban ${n}`, op: n => `admin ${n}`, deop: n => `unadmin ${n}`, wlAdd: n => `permit ${n}`, wlRemove: n => `unpermit ${n}`, list: 'players' },
 };
 const ACTION_LABELS = { kick: 'Wyrzuć', ban: 'Zbanuj', pardon: 'Odbanuj', op: 'Nadaj operatora', deop: 'Odbierz operatora', wlAdd: 'Dodaj do białej listy', wlRemove: 'Usuń z białej listy' };
 

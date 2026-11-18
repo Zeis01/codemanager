@@ -148,6 +148,139 @@ const GAMES = [
     checker: 'xray', nexus: 'stalkercallofpripyat',
     desc: 'Folder gamedata i ustawienie fsgame.ltx, które pozwala grze wczytać mody.',
   },
+  // ---- dodane w 1.7.0 ----
+  {
+    id: 'subnautica', compat: 'full', name: 'Subnautica', short: 'SN', color: '#2a9fd6', appIds: [264710], exe: ['Subnautica.exe'], epic: /^subnautica$/i,
+    checker: 'bepinex', loaders: ['bepinex5'], nexus: 'subnautica', thunderstore: 'subnautica', r2: ['Subnautica'],
+    desc: 'BepInEx 5 + Nautilus: zależności i wersje pluginów, duplikaty, błędy z LogOutput.log.',
+  },
+  {
+    id: 'subnauticabz', compat: 'full', name: 'Subnautica: Below Zero', short: 'SBZ', color: '#5fc4e8', appIds: [848450], exe: ['SubnauticaZero.exe'], epic: /below zero/i,
+    checker: 'bepinex', loaders: ['bepinex5'], nexus: 'subnauticabelowzero', thunderstore: 'subnautica-below-zero', r2: ['SubnauticaBelowZero'],
+    desc: 'BepInEx 5 + Nautilus: zależności i wersje pluginów, duplikaty, błędy z LogOutput.log.',
+  },
+  {
+    id: 'amongus', compat: 'full', name: 'Among Us', short: 'AU', color: '#c51111', appIds: [945360], exe: ['Among Us.exe'], epic: /among us/i,
+    checker: 'bepinex', loaders: ['bepinex6'], bepinexMajor: 6, nexus: 'amongus', thunderstore: 'among-us', r2: ['AmongUs'],
+    desc: 'BepInEx 6 (IL2CPP) + Reactor: zależności, wersje, duplikaty. Mody działają tylko z wersją gry, dla której je zbudowano.',
+  },
+  {
+    id: 'phasmophobia', compat: 'basic', name: 'Phasmophobia', short: 'PH', color: '#4d5b6b', appIds: [739630], exe: ['Phasmophobia.exe'],
+    checker: 'melonloader', loaders: ['melonloader'], nexus: 'phasmophobia',
+    desc: 'MelonLoader: wersja loadera, mody IL2CPP, zależności. Mody działają tylko w grze prywatnej – gra wykrywa je w lobby publicznym.',
+  },
+  {
+    id: 'hollowknight', compat: 'full', name: 'Hollow Knight', short: 'HK', color: '#9aa9c4', appIds: [367520], exe: ['hollow_knight.exe'], epic: /hollow knight/i,
+    checker: 'hollowknight', nexus: 'hollowknight',
+    desc: 'Modding API (Lumafly/Scarab): obecność API, struktura Mods/<mod>/, duplikaty bibliotek, brakujące zależności z ModLog.txt.',
+  },
+  {
+    id: 'raft', compat: 'none', name: 'Raft', short: 'RAFT', color: '#3b8ec2', appIds: [648800], exe: ['Raft.exe'],
+    checker: 'files', nexus: 'raft', manual: { dirs: ['mods'], kind: 'any', ext: /\.(rmod|dll)$/i },
+    desc: 'Mody .rmod dla Raft Mod Loadera (folder mods). Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'theforest', compat: 'none', name: 'The Forest', short: 'TF', color: '#55703a', appIds: [242760], exe: ['TheForest.exe'],
+    checker: 'files', nexus: 'theforest', manual: { dirs: ['Mods'], kind: 'any', root: false },
+    desc: 'Mody ModAPI i ręczne. Sprawdzanie zgodności niedostępne – ModAPI kompiluje mody do plików gry.',
+  },
+  {
+    id: 'unturned', compat: 'none', name: 'Unturned', short: 'UNT', color: '#6ea64f', appIds: [304930], exe: ['Unturned.exe'],
+    checker: 'files', workshop: 304930, nexus: 'unturned', manual: { dirs: ['workshop', 'Bundles/Workshop/Content'], kind: 'folders', readOnly: true },
+    desc: 'Mody, mapy i przedmioty z Warsztatu Steam. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'workersresources', compat: 'none', name: 'Workers & Resources: Soviet Republic', short: 'W&R', color: '#b23a2e', appIds: [784150], exe: ['SovietRepublic.exe'],
+    checker: 'files', workshop: 784150, nexus: 'workersandresourcessovietrepublic', manual: { dirs: ['workshop', 'media_soviet/workshop_wip'], kind: 'folders', readOnly: true },
+    desc: 'Budynki, pojazdy i mapy z Warsztatu Steam. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'prisonarchitect', compat: 'none', name: 'Prison Architect', short: 'PA', color: '#d9a400', appIds: [233720], exe: ['Prison Architect64.exe', 'Prison Architect.exe'],
+    checker: 'files', workshop: 233720, nexus: 'prisonarchitect', manual: { dirs: ['%LOCALAPPDATA%/Introversion/Prison Architect/mods', 'workshop'], kind: 'folders' },
+    desc: 'Mody lokalne i z Warsztatu. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'assettocorsa', compat: 'full', name: 'Assetto Corsa', short: 'AC', color: '#c0392b', appIds: [244210], exe: ['AssettoCorsa.exe', 'acs.exe'],
+    checker: 'assetto', nexus: 'assettocorsa',
+    desc: 'Auta i tory z modów: kompletność (data.acd, .kn5, surfaces.ini), opisy UI, wymagania Custom Shaders Patch.',
+  },
+  {
+    id: 'beamng', compat: 'full', name: 'BeamNG.drive', short: 'BNG', color: '#f7931e', appIds: [284160], exe: ['BeamNG.drive.exe', 'Bin64/BeamNG.drive.x64.exe'],
+    checker: 'beamng', nexus: 'beamngdrive',
+    desc: 'Mody .zip: włączanie przez db.json, uszkodzone archiwa, zła struktura, mody nadpisujące ten sam pojazd lub mapę.',
+  },
+  {
+    id: 'ats', compat: 'full', name: 'American Truck Simulator', short: 'ATS', color: '#c8102e', appIds: [270880], exe: ['bin/win_x64/amtrucks.exe', 'bin/linux_x64/amtrucks'],
+    checker: 'ets2', workshop: 270880, nexus: 'americantrucksimulator', docFolder: 'American Truck Simulator',
+    desc: 'manifest.sii / versions.sii: zgodność z wersją gry, uszkodzone paczki.',
+  },
+  ...[[17, 447020, 2017, 'farmingsimulator17'], [19, 787860, 2019, 'farmingsimulator19'], [22, 1248130, 2022, 'farmingsimulator22'], [25, 2300320, 2025, 'farmingsimulator25']].map(([n, app, year, nx]) => ({
+    id: 'fs' + n, compat: 'full', name: 'Farming Simulator ' + n, short: 'FS' + n, color: ['#4d8f2a', '#5aa02c', '#6aaf33', '#7cbf3b'][[17, 19, 22, 25].indexOf(n)], appIds: [app], exe: [`FarmingSimulator${year}.exe`, `x64/FarmingSimulator${year}Game.exe`], epic: new RegExp(`farming simulator ${n}`, 'i'),
+    checker: 'farmsim', fsYear: year, nexus: nx,
+    extraPaths: [`C:\\Program Files (x86)\\Farming Simulator ${year}`, `C:\\Program Files\\Farming Simulator ${year}`],
+    desc: 'modDesc.xml: mod do właściwej części gry (descVersion), brakujące zależności, nieprawidłowe nazwy plików, duplikaty, błędy z log.txt.',
+  })),
+  {
+    id: 'wreckfest', compat: 'none', name: 'Wreckfest', short: 'WF', color: '#b5651d', appIds: [228380], exe: ['Wreckfest_x64.exe', 'Wreckfest.exe'],
+    checker: 'files', workshop: 228380, nexus: 'wreckfest', manual: { dirs: ['mods', 'workshop'], kind: 'folders' },
+    desc: 'Mody lokalne (folder mods) i z Warsztatu. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'mygarage', compat: 'none', name: 'My Garage', short: 'MG', color: '#c47f2c', appIds: [1578390], exe: ['My Garage.exe', 'MyGarage.exe'],
+    checker: 'files', nexus: 'mygarage', manual: { dirs: ['Mods'], kind: 'any' },
+    desc: 'Instalacja modów z Nexus Mods lub ręcznie. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'cms2018', compat: 'none', name: 'Car Mechanic Simulator 2018', short: 'CMS18', color: '#d35400', appIds: [645630], exe: ['cms2018.exe'],
+    checker: 'files', workshop: 645630, nexus: 'carmechanicsimulator2018', manual: { dirs: ['workshop', 'Mods'], kind: 'folders' },
+    desc: 'Auta i mody z Warsztatu oraz folderu Mods. Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'cms2021', compat: 'basic', name: 'Car Mechanic Simulator 2021', short: 'CMS21', color: '#e67e22', appIds: [1190000], exe: ['Car Mechanic Simulator 2021.exe'], epic: /car mechanic simulator 2021/i,
+    checker: 'melonloader', loaders: ['melonloader'], workshop: 1190000, nexus: 'carmechanicsimulator2021',
+    desc: 'MelonLoader: wersja loadera, zależności, duplikaty. Auta z Warsztatu wykrywane osobno.',
+  },
+  {
+    id: 'stormworks', compat: 'none', name: 'Stormworks: Build and Rescue', short: 'SW', color: '#e0662c', appIds: [573090], exe: ['stormworks64.exe', 'stormworks.exe'],
+    checker: 'files', workshop: 573090, nexus: 'stormworksbuildandrescue', manual: { dirs: ['workshop', '%APPDATA%/Stormworks/data/missions', '%APPDATA%/Stormworks/data/vehicles'], kind: 'folders', readOnly: true },
+    desc: 'Pojazdy, misje i mody z Warsztatu oraz folderu danych gry. Sprawdzanie zgodności niedostępne.',
+  },
+  ...[[3, 220240, 'farcry3', 'Far Cry 3', 'farcry3_d3d11.exe'], [4, 298110, 'farcry4', 'Far Cry 4', 'FarCry4.exe'], [5, 552520, 'farcry5', 'Far Cry 5', 'FarCry5.exe'], [6, 2369390, 'farcry6', 'Far Cry 6', 'FarCry6.exe']].map(([n, app, nx, name, exeName]) => ({
+    id: 'farcry' + n, compat: 'none', name, short: 'FC' + n, color: ['#d4a017', '#c0392b', '#e67e22', '#e74c3c'][n - 3], appIds: [app], exe: [exeName, 'bin/' + exeName], epic: new RegExp(`^far cry ${n}$`, 'i'),
+    checker: 'files', nexus: nx, manual: { dirs: [], kind: 'registry', root: true },
+    desc: n >= 5 ? 'Mody instalowane przez Mod Installer (data_final/pc) lub z Nexus Mods. Sprawdzanie zgodności niedostępne.' : 'Mody instalowane przez Mod Installer (patch.fat/.dat) lub z Nexus Mods. Sprawdzanie zgodności niedostępne.',
+  })),
+  {
+    id: 'dyinglight', compat: 'none', name: 'Dying Light', short: 'DL', color: '#8e2a2a', appIds: [239140], exe: ['DyingLightGame.exe'], epic: /^dying light$/i,
+    checker: 'files', nexus: 'dyinglight', manual: { dirs: ['DW'], kind: 'pak', exclude: /^data[01]\.pak$/i },
+    desc: 'Mody .pak w folderze DW (Data2.pak i kolejne). Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'dyinglight2', compat: 'none', name: 'Dying Light 2', short: 'DL2', color: '#a8322d', appIds: [534380], exe: ['ph/work/bin/x64/DyingLightGame_x64_rwdi.exe'], epic: /dying light 2/i,
+    checker: 'files', nexus: 'dyinglight2', manual: { dirs: ['ph/source'], kind: 'pak', exclude: /^data[01]\.pak$/i },
+    desc: 'Mody .pak w ph/source (data2.pak–data7.pak). Sprawdzanie zgodności niedostępne.',
+  },
+  {
+    id: 'gtasa', compat: 'full', name: 'GTA: San Andreas', short: 'GTA SA', color: '#e8a33d', appIds: [12120], exe: ['gta_sa.exe', 'gta-sa.exe'],
+    checker: 'gtasa', nexus: 'gtasanandreas',
+    extraPaths: ['C:\\Program Files (x86)\\Rockstar Games\\GTA San Andreas', 'C:\\Program Files\\Rockstar Games\\GTA San Andreas', 'C:\\Games\\GTA San Andreas'],
+    desc: 'Wersja pliku gry (1.0 US / nowa), ASI Loader, CLEO, Mod Loader, SilentPatch, duplikaty modów .asi.',
+  },
+  {
+    id: 'gta4', compat: 'full', name: 'GTA IV', short: 'GTA IV', color: '#7a8a99', appIds: [12210, 901583], exe: ['GTAIV.exe', 'GTAIV/GTAIV.exe'],
+    checker: 'gta4', nexus: 'gta4',
+    desc: 'Wersja gry (Complete Edition / 1.0.x), ASI Loader, FusionFix, ScriptHook i ScriptHookDotNet, folder update.',
+  },
+  {
+    id: 'l4d', compat: 'full', name: 'Left 4 Dead', short: 'L4D', color: '#8b1a1a', appIds: [500], exe: ['left4dead.exe'],
+    checker: 'vpk', sourceDir: 'left4dead', nexus: 'left4dead',
+    desc: 'Dodatki .vpk: odczyt addoninfo, uszkodzone archiwa, konflikty plików między dodatkami.',
+  },
+  {
+    id: 'l4d2', compat: 'full', name: 'Left 4 Dead 2', short: 'L4D2', color: '#b5432c', appIds: [550], exe: ['left4dead2.exe'],
+    checker: 'vpk', sourceDir: 'left4dead2', workshop: 550, nexus: 'left4dead2',
+    desc: 'Dodatki .vpk i Warsztat: włączanie przez addonlist.txt, uszkodzone archiwa, konflikty plików i skryptów między dodatkami.',
+  },
   // ---- tylko instalacja ręczna (bez sprawdzania zgodności) ----
   {
     id: 'stalker2', compat: 'none', name: 'S.T.A.L.K.E.R. 2: Heart of Chornobyl', short: 'S2', color: '#5d7f5a', appIds: [1643320], exe: ['Stalker2.exe', 'Stalker2/Binaries/Win64/Stalker2-Win64-Shipping.exe'],

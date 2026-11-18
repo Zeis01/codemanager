@@ -201,6 +201,7 @@ class ServerManager {
   }
   async workshopAdd(id, itemId) {
     const s = this.get(id); const t = TYPES[s.type];
+    if (t.workshopAdd) { this.log(id, `=== Warsztat: ${itemId} ===`); const r = await t.workshopAdd(s, itemId, m => this.log(id, m)); this.save(); return r; }
     if (!t.workshopApp) throw new Error('Ten serwer nie obsługuje pobierania z Warsztatu');
     this.log(id, `=== Pobieranie przedmiotu Warsztatu ${itemId} ===`);
     const dir = await steamcmdWorkshop(s, this.ctx(s), t.workshopApp, itemId, s.settings.steamuser);

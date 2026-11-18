@@ -5,7 +5,7 @@ App.views = App.views || {};
   const { h, $, $$, icon, esc, api, toast, modal, gameBadge, renderIssues, healthBar } = App;
   let types = null;
   const STATUS = { running: 'Działa', stopped: 'Zatrzymany', installing: 'Instalowanie…', stopping: 'Zatrzymywanie…', error: 'Błąd', starting: 'Uruchamianie…' };
-  const SHORT = { minecraft: 'MC', rust: 'RUST', cs2: 'CS2', dayz: 'DZ', valheim: 'VH', projectzomboid: 'PZ', tf2: 'TF2', armareforger: 'AR', terraria: 'TS', fivem: '5M', mta: 'MTA', beammp: 'BMP', palworld: 'PAL', ark: 'ARK', satisfactory: 'SAT', enshrouded: 'ENS', spaceengineers: 'SE', mcproxy: 'PRX' };
+  const SHORT = { unturned: 'UNT', l4d2: 'L4D2', redm: 'RDM', minecraft: 'MC', rust: 'RUST', cs2: 'CS2', dayz: 'DZ', valheim: 'VH', projectzomboid: 'PZ', tf2: 'TF2', armareforger: 'AR', terraria: 'TS', fivem: '5M', mta: 'MTA', beammp: 'BMP', palworld: 'PAL', ark: 'ARK', satisfactory: 'SAT', enshrouded: 'ENS', spaceengineers: 'SE', mcproxy: 'PRX' };
   App.SRV_SHORT = SHORT;
   const srvIcon = t => App.state.icons && App.state.icons.servers && App.state.icons.servers[t];
   const badge = s => gameBadge({ color: s.color, short: SHORT[s.type], name: s.typeName || '', iconData: srvIcon(s.type) });
@@ -209,7 +209,7 @@ App.views = App.views || {};
         <div class="w"><div class="n">${rep.counts.warn}</div><div class="l">ostrzeżenia</div></div>
         <div class="o"><div class="n">${rep.mods.filter(m => m.enabled).length}</div><div class="l">aktywne</div></div>
         <div class="grow" style="min-width:140px">${healthBar(rep.mods)}</div>
-        ${s.type === 'dayz' ? `<button class="btn" data-ws>${icon('download')}Dodaj z Warsztatu</button>` : ''}
+        ${['dayz', 'unturned'].includes(s.type) ? `<button class="btn" data-ws>${icon('download')}Dodaj z Warsztatu</button>` : ''}
         ${['cs2', 'valheim', 'minecraft'].includes(s.type) ? `<button class="btn" data-online>${icon('globe')}Sprawdź online</button>` : ''}
         ${(s.type === 'minecraft' && s.variant !== 'vanilla') || s.type === 'mcproxy' || s.type === 'valheim' ? `<button class="btn" data-upall>${icon('update')}Aktualizuj wszystko</button><button class="btn" data-get>${icon('download')}Pobierz</button>` : ''}
         ${s.type === 'minecraft' && ['fabric', 'quilt', 'forge', 'neoforge'].includes(s.variant) ? `<button class="btn" data-mrpack>${icon('archive')}.mrpack</button>` : ''}
@@ -249,8 +249,9 @@ App.views = App.views || {};
     $('[data-add]', c).onclick = async () => { const f = await api('dialog:files', 'Wybierz pliki'); if (f.length) { await api('mods:add', content.dir, f); toast(`Dodano ${f.length} plik(ów)`); tabContent(c, s, content); } };
     const ws = $('[data-ws]', c);
     if (ws) ws.onclick = async () => {
-      const id = await App.promptBox('Dodaj mod z Warsztatu DayZ', 'ID przedmiotu Warsztatu (z adresu strony moda)');
-      if (!id || !/^\d+$/.test(id.trim())) return;
+      let id = await App.promptBox(s.type === 'unturned' ? 'Dodaj mod z Warsztatu Unturned' : 'Dodaj mod z Warsztatu DayZ', 'ID przedmiotu Warsztatu lub link do strony moda');
+      id = id && ((String(id).match(/[?&]id=(\d+)/) || [])[1] || String(id).trim());
+      if (!id || !/^\d+$/.test(id)) return;
       App.go('servers', { id: s.id, tab: 'console' });
       try { const name = await window.cm.call('servers:workshop', s.id, id.trim()); toast(`Dodano ${name}`); } catch (e) { toast(e.message, 'error'); }
     };

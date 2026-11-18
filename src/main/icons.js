@@ -9,7 +9,7 @@ const N = require('./net');
 // AppID gier, z których serwery biorą ikonę
 const SERVER_APPS = {
   rust: 252490, cs2: 730, dayz: 221100, valheim: 892970, projectzomboid: 108600, tf2: 440, armareforger: 1874880, terraria: 105600,
-  fivem: 271590, mta: 12120, beammp: 284160, palworld: 1623730, ark: 2399830, satisfactory: 526870, enshrouded: 1203620, spaceengineers: 244850,
+  unturned: 304930, l4d2: 550, redm: 1174180, fivem: 271590, mta: 12120, beammp: 284160, palworld: 1623730, ark: 2399830, satisfactory: 526870, enshrouded: 1203620, spaceengineers: 244850,
 };
 const MINECRAFT_EXES = () => [
   path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Minecraft Launcher', 'MinecraftLauncher.exe'),

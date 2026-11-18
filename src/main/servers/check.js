@@ -114,8 +114,8 @@ async function cs2Online(s) {
 // ---------------- TF2 / SourceMod ----------------
 const SM_BUNDLED = new Set(['core', 'sdktools', 'sdkhooks', 'clientprefs', 'dbi', 'bintools', 'geoip', 'regex', 'topmenus', 'tf2', 'tf2items', 'cstrike', 'dhooks', 'socket', 'updater']);
 function checkSourceMod(s) {
-  const rep = new Report('TF2 – SourceMod');
-  const tf = path.join(s.path, 'tf');
+  const rep = new Report(s.type === 'l4d2' ? 'Left 4 Dead 2 – SourceMod' : 'TF2 – SourceMod');
+  const tf = path.join(s.path, require('./defs').srcGame(s));
   const sm = FRAMEWORKS.sourcemod.status(s); const mm = FRAMEWORKS.metamod112.status(s);
   rep.meta = { 'Metamod': mm ? 'tak' : 'brak', 'SourceMod': sm ? 'tak' : 'brak' };
   if (sm && !mm) rep.error('SourceMod wymaga Metamod:Source', { fix: 'Zainstaluj Metamod:Source 1.12.', action: { type: 'framework', id: 'metamod112', label: 'Zainstaluj Metamod' } });
@@ -253,7 +253,8 @@ function fivemResources(root) {
   return out;
 }
 function checkFiveM(s) {
-  const rep = new Report('FiveM – zasoby');
+  const redm = s.type === 'redm';
+  const rep = new Report(redm ? 'RedM – zasoby' : 'FiveM – zasoby');
   const data = path.join(s.path, 'server-data');
   const cfg = U.readText(path.join(data, 'server.cfg'), '');
   const ensured = [...cfg.matchAll(/^\s*(?:ensure|start)\s+([^\s#]+)/gm)].map(m => m[1]);
@@ -274,7 +275,9 @@ function checkFiveM(s) {
     else if (!fx) rep.error(`${r.name}: brak fx_version w fxmanifest.lua`, { mod: r.dir });
     else if (!['adamant', 'bodacious', 'cerulean'].includes(fx)) rep.warn(`${r.name}: nieznane fx_version "${fx}"`, { mod: r.dir });
     if (game && !['gta5', 'common', 'rdr3'].includes(game)) rep.warn(`${r.name}: nietypowa gra "${game}"`, { mod: r.dir });
-    if (game === 'rdr3') rep.error(`${r.name} jest zasobem RedM (rdr3), nie FiveM`, { mod: r.dir });
+    if (!redm && game === 'rdr3') rep.error(`${r.name} jest zasobem RedM (rdr3), nie FiveM`, { mod: r.dir });
+    if (redm && game === 'gta5') rep.error(`${r.name} jest zasobem FiveM (gta5), nie RedM`, { mod: r.dir });
+    if (redm && game === 'rdr3' && !p.calls.some(c => c.name === 'rdr3_warning')) rep.error(`${r.name}: brak rdr3_warning w fxmanifest.lua`, { mod: r.dir, fix: 'Zasoby RedM muszą zawierać linię rdr3_warning \'I acknowledge that this is a prerelease build of RedM…\' – bez niej serwer ich nie uruchomi.' });
     for (const d of deps) {
       const dn = d.replace(/^\/.*$/, '');
       if (!dn) continue; // zależności typu /server:1234
@@ -507,6 +510,42 @@ function checkSpaceEngineers(s) {
   return rep.finish();
 }
 
+// ---------------- Unturned ----------------
+function checkUnturned(s) {
+  const D = require('./defs3');
+  const rep = new Report('Unturned – pluginy i mody');
+  const dir = D.untDir(s);
+  const rocket = FRAMEWORKS.rocketmod.status(s); const om = FRAMEWORKS.openmod.status(s);
+  const cmds = U.readText(path.join(dir, 'Server', 'Commands.dat'), '');
+  const cmd = k => ((cmds.match(new RegExp(`^${k}\\s+(.+)$`, 'mi')) || [])[1] || '').trim();
+  const ws = D.untWorkshop(s).j;
+  rep.meta = { 'Framework': [rocket && 'RocketMod', om && 'OpenMod'].filter(Boolean).join(' + ') || 'brak', 'Mapa': cmd('Map') || '-', 'Mody z Warsztatu': (ws.File_IDs || []).length };
+  if (!cmds) rep.warn('Brak pliku Servers/' + path.basename(dir) + '/Server/Commands.dat', { fix: 'Uruchom serwer raz albo zapisz ustawienia – CodeManager utworzy plik.' });
+  if (s.settings.lan !== '1' && !cmd('GSLT')) rep.warn('Brak tokenu GSLT', { fix: 'Bez tokenu serwer nie pojawi się na liście serwerów internetowych. Wygeneruj go na steamcommunity.com/dev/managegameservers (App ID 304930) i wpisz w ustawieniach serwera.' });
+  const port = +cmd('Port') || +s.port; if (port && port !== +s.port) rep.warn(`Port w Commands.dat (${port}) różni się od portu w CodeManager (${s.port})`);
+  if (om && rocket) rep.note('Działają OpenMod i RocketMod jednocześnie – OpenMod załaduje pluginy RocketMod przez most (rocketmod.openmod).');
+  const bad = (ws.File_IDs || []).filter(x => !/^\d{6,}$/.test(String(x)));
+  if (bad.length) rep.error('Nieprawidłowe ID w WorkshopDownloadConfig.json: ' + bad.join(', '));
+  const pdirs = [[path.join(dir, 'Rocket', 'Plugins'), 'Rocket/Plugins', rocket], [path.join(dir, 'OpenMod', 'plugins'), 'OpenMod/plugins', om]];
+  const seen = new Map();
+  for (const [pd, label, fwOn] of pdirs) {
+    for (const f of U.listFiles(pd, ['.dll', '.disabled'])) {
+      const base = path.basename(f).replace(/\.disabled$/i, '');
+      if (!/\.dll$/i.test(base)) continue;
+      const enabled = !/\.disabled$/i.test(f);
+      rep.addMod({ key: f, file: f, name: base.replace(/\.dll$/i, ''), version: (peVersion(f) || {}).file || '-', enabled, toggleable: true, source: label, size: sizeOf(f) });
+      if (!enabled) continue;
+      if (!fwOn) rep.error(`${base} leży w ${label}, ale ten framework nie jest zainstalowany`, { mod: f, fix: 'Zainstaluj framework w zakładce Frameworki.' });
+      const k = base.toLowerCase(); if (seen.has(k)) rep.error(`Plugin ${base} jest zainstalowany dwa razy`, { files: [seen.get(k), f] }); else seen.set(k, f);
+    }
+  }
+  for (const id of ws.File_IDs || []) rep.addMod({ key: 'ws-' + id, name: `Warsztat #${id}`, version: '-', enabled: true, source: 'Warsztat #' + id });
+  const log = U.readText(path.join(s.path, 'Logs', 'Server.log'), '') || lastLog(path.join(s.path, 'Logs'));
+  [...log.matchAll(/^(.*(?:Failed to load plugin|Exception|could not load).*)$/gim)].slice(-8).forEach(m => rep.warn('Log: ' + m[1].trim().slice(0, 220)));
+  clean(rep, 'Konfiguracja serwera Unturned wygląda poprawnie');
+  return rep.finish();
+}
+
 // ---------------- dyspozytor ----------------
 function check(server) {
   switch (server.type) {
@@ -517,7 +556,9 @@ function check(server) {
     }
     case 'rust': return checkRust(server);
     case 'cs2': return checkCS2(server);
-    case 'tf2': return checkSourceMod(server);
+    case 'tf2': case 'l4d2': return checkSourceMod(server);
+    case 'redm': return checkFiveM(server);
+    case 'unturned': return checkUnturned(server);
     case 'dayz': return checkDayZ(server);
     case 'armareforger': return checkArma(server);
     case 'projectzomboid': return checkPZServer(server);

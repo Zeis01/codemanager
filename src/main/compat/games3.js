@@ -15,7 +15,7 @@ const logLines = (file, re, max = 15) => (file ? U.readText(file, '') : '').spli
 // =============== Gry bez sprawdzania zgodności ===============
 function resolveDir(d, ctx) {
   if (d === 'workshop') return ctx.workshop || [];
-  let p = d.replace('%LOCALAPPDATA%', U.localAppData()).replace('%LOCALLOW%', path.join(U.home(), 'AppData', 'LocalLow')).replace('%DOCUMENTS%', U.documents());
+  let p = d.replace('%LOCALAPPDATA%', U.localAppData()).replace('%LOCALLOW%', path.join(U.home(), 'AppData', 'LocalLow')).replace('%DOCUMENTS%', U.documents()).replace('%APPDATA%', U.appData());
   return [path.isAbsolute(p) ? p : path.join(ctx.gamePath, p)];
 }
 function manualDirs(game, ctx) { return (game.manual.dirs || []).flatMap(d => resolveDir(d, ctx)); }
@@ -32,17 +32,20 @@ function checkFiles(ctx) {
       // grupy plików: nazwa.pak + .ucas + .utoc + .sig
       const groups = new Map();
       for (const f of collect(dir, ['.pak', '.ucas', '.utoc', '.sig'])) {
+        if (m.exclude && m.exclude.test(f.name.replace(/\.disabled$/i, ''))) continue;
         const base = f.name.replace(/\.disabled$/i, '').replace(/\.(pak|ucas|utoc|sig)$/i, '');
         if (!groups.has(base)) groups.set(base, []);
         groups.get(base).push(f);
       }
       for (const [base, files] of groups) {
         const enabled = files.every(f => f.enabled);
-        rep.addMod({ key: path.join(dir, base), file: path.join(dir, base), name: base.replace(/_P$/, ''), version: files.map(f => path.extname(f.name.replace(/\.disabled$/i, '')).slice(1)).join('+'), enabled, toggleable: true, toggle: 'group', files: files.map(f => f.file), size: files.reduce((a, f) => a + sizeOf(f.file), 0), source: '~mods' });
+        rep.addMod({ key: path.join(dir, base), file: path.join(dir, base), name: base.replace(/_P$/, ''), version: files.map(f => path.extname(f.name.replace(/\.disabled$/i, '')).slice(1)).join('+'), enabled, toggleable: true, toggle: 'group', files: files.map(f => f.file), size: files.reduce((a, f) => a + sizeOf(f.file), 0), source: path.basename(dir) });
       }
     } else if (m.kind === 'folders' || m.kind === 'any') {
       for (const e of U.listDir(dir)) {
         if (e.name.startsWith('.')) continue;
+        if (m.exclude && m.exclude.test(e.name.replace(/\.disabled$/i, ''))) continue;
+        if (m.ext && e.isFile() && !m.ext.test(e.name.replace(/\.disabled$/i, ''))) continue;
         const full = path.join(dir, e.name);
         rep.addMod({ key: full, file: full, name: isWs ? `Warsztat #${e.name}` : e.name.replace(/\.disabled$/i, ''), version: '-', enabled: !/\.disabled$/i.test(e.name), toggleable: !m.readOnly && !isWs && e.isFile(), source: isWs ? 'Warsztat Steam' : 'Folder modów', size: e.isFile() ? sizeOf(full) : undefined });
       }

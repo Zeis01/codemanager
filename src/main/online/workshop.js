@@ -73,6 +73,7 @@ function installItem(game, itemDir, id, modsDir) {
     case 'garrysmod': for (const f of U.walk(itemDir)) { if (/\.gma$/i.test(f)) cp(path.join(itemDir, f), path.join(modsDir, `${id}_${path.basename(f)}`)); } if (!out.length) cp(itemDir, path.join(modsDir, id)); break;
     case 'tmodloader': for (const f of U.walk(itemDir)) { if (/\.tmod$/i.test(f)) cp(path.join(itemDir, f), path.join(modsDir, path.basename(f))); } break;
     case 'ets2': for (const f of U.walk(itemDir)) { if (/\.(scs|zip)$/i.test(f)) cp(path.join(itemDir, f), path.join(modsDir, `${id}_${path.basename(f)}`)); } break;
+    case 'vpk': for (const f of U.walk(itemDir)) { if (/\.vpk$/i.test(f)) cp(path.join(itemDir, f), path.join(modsDir, 'workshop', `${id}.vpk`)); } break;
     case 'transportfever2': cp(itemDir, path.join(modsDir, `workshop_${id}_1`)); break;
     case 'paradox': {
       const dst = path.join(modsDir, 'ugc_' + id); cp(itemDir, dst);

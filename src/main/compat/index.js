@@ -9,6 +9,7 @@ const unity = require('./unity');
 const G = require('./games');
 const G2 = require('./games2');
 const G3 = require('./games3');
+const G4 = require('./games4');
 const { toggleByRename } = require('./common');
 
 // Profile (instancje) dla gry – np. instancje Minecrafta lub profile r2modman
@@ -33,7 +34,14 @@ function modsTarget(gameId, profile, info) {
     case 'garrysmod': return path.join(root, 'garrysmod', 'addons');
     case 'dst': return path.join(root, 'mods');
     case 'gta5': return root;
-    case 'ets2': { const d = U.documentsCandidates()[0] || U.documents(); return path.join(d, 'Euro Truck Simulator 2', 'mod'); }
+    case 'ets2': { const d = U.documentsCandidates()[0] || U.documents(); return path.join(d, byId(gameId).docFolder || 'Euro Truck Simulator 2', 'mod'); }
+    case 'vpk': return path.join(root, byId(gameId).sourceDir, 'addons');
+    case 'farmsim': return G4.fsModsDir(byId(gameId).fsYear);
+    case 'beamng': return G4.beamModsDir();
+    case 'gtasa': return U.isDir(path.join(root, 'modloader')) ? path.join(root, 'modloader') : root;
+    case 'gta4': return U.exists(path.join(root, 'GTAIV', 'GTAIV.exe')) ? path.join(root, 'GTAIV') : root;
+    case 'hollowknight': return path.join(G4.hkManaged(root), 'Mods');
+    case 'assetto': return path.join(root, 'content', 'cars');
     case 'projectzomboid': return path.join(U.home(), 'Zomboid', 'mods');
     case 'paradox': { const d = U.documentsCandidates()[0] || U.documents(); return path.join(d, 'Paradox Interactive', byId(gameId).paradoxFolder, 'mod'); }
     case 'tmodloader': { const d = U.documentsCandidates()[0] || U.documents(); return path.join(d, 'My Games', 'Terraria', 'tModLoader', 'Mods'); }
@@ -63,7 +71,7 @@ function check(gameId, info, profile, settings = {}) {
       if (!p) throw new Error('Brak instancji Minecrafta');
       return mc.checkMods({ modsDir: path.join(p.root, 'mods'), mcVersion: settings.mcVersion || p.mcVersion, loader: settings.loader || p.loader, loaderVersion: settings.loaderVersion || p.loaderVersion, side: 'client', title: p.name });
     }
-    case 'bepinex': return unity.checkBepInEx({ ...ctx, title: game.name, expectMajor: 5 });
+    case 'bepinex': return unity.checkBepInEx({ ...ctx, title: game.name, expectMajor: game.bepinexMajor || 5 });
     case 'melonloader': return unity.checkMelonLoader({ ...ctx, title: game.name });
     case 'redloader': return unity.checkRedLoader({ ...ctx, title: game.name });
     case 'projectzomboid': return G.checkProjectZomboid(ctx);
@@ -87,6 +95,13 @@ function check(gameId, info, profile, settings = {}) {
     case 'teardown': return G3.checkTeardown(ctx);
     case 'xray': return G3.checkXray(ctx);
     case 'files': return G3.checkFiles({ ...ctx, nexusInstalls: settings.__nexus || [] });
+    case 'vpk': return G4.checkVpk(ctx);
+    case 'farmsim': return G4.checkFarmSim(ctx);
+    case 'beamng': return G4.checkBeamNG(ctx);
+    case 'gtasa': return G4.checkGTASA(ctx);
+    case 'gta4': return G4.checkGTA4(ctx);
+    case 'hollowknight': return G4.checkHollowKnight(ctx);
+    case 'assetto': return G4.checkAssetto(ctx);
   }
   throw new Error('Brak sprawdzania dla tej gry');
 }
@@ -104,6 +119,13 @@ async function online(gameId, info, profile, settings = {}) {
 
 // Przełączanie moda
 function toggle(mod, ctx = {}) {
+  if (mod.toggle === 'addonlist') {
+    const g = byId(ctx.gameId) || byId('l4d2');
+    let file = mod.file;
+    if (/\.disabled$/i.test(file)) { const t = file.slice(0, -9); fs.renameSync(file, t); file = t; G4.addonlistToggle(ctx.gamePath, g.sourceDir, mod.id, true); return file; }
+    G4.addonlistToggle(ctx.gamePath, g.sourceDir, mod.id, !mod.enabled); return file;
+  }
+  if (mod.toggle === 'beamng') return G4.beamToggle(mod.id, mod.file, !mod.enabled);
   if (mod.toggle === 'rimworld') { G2.rimToggle(mod.id, !mod.enabled); return mod.file; }
   if (mod.toggle === 'w3settings') { G3.w3Toggle(mod.id, !mod.enabled); return mod.file; }
   if (mod.toggle === 'group') {

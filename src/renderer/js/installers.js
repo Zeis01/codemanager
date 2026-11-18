@@ -41,7 +41,7 @@ App.views.installers = {
       lw.appendChild(card);
     }
     const SHORT = App.SRV_SHORT || {};
-    const SRC = { minecraft: 'Mojang / PaperMC / Purpur / Fabric / Forge / NeoForge / Quilt', terraria: 'GitHub: Pryaxis/TShock', fivem: 'Artefakty FXServer + cfx-server-data', mta: 'Instalacja MTA:SA (Windows) / linux.multitheftauto.com', beammp: 'GitHub: BeamMP/BeamMP-Server', mcproxy: 'PaperMC (Velocity) / md-5 CI (BungeeCord)', ark: 'SteamCMD: ASA 2430930 / ASE 376030' };
+    const SRC = { minecraft: 'Mojang / PaperMC / Purpur / Fabric / Forge / NeoForge / Quilt', terraria: 'GitHub: Pryaxis/TShock', fivem: 'Artefakty FXServer + cfx-server-data', redm: 'Artefakty FXServer + cfx-server-data (gamename rdr3)', mta: 'Instalacja MTA:SA (Windows) / linux.multitheftauto.com', beammp: 'GitHub: BeamMP/BeamMP-Server', mcproxy: 'PaperMC (Velocity) / md-5 CI (BungeeCord)', ark: 'SteamCMD: ASA 2430930 / ASE 376030' };
     const sw = $('[data-s]', el);
     for (const t of types) {
       const card = h(`<div class="loader-card"><div class="row">${App.gameBadge({ color: t.color, short: SHORT[t.id], name: t.name, iconData: App.state.icons && App.state.icons.servers[t.id] }, 32)}<h2 style="flex:1">${esc(t.name)}</h2></div>

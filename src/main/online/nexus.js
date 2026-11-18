@@ -35,6 +35,8 @@ const DOMAINS = {
   metro2033redux: 'metro2033redux', metrolastlightredux: 'metrolastlightredux', metroexodus: 'metroexodus', readyornot: 'readyornot',
   citiesskylines: 'citiesskylines', citiesskylines2: 'citiesskylines2',
 };
+// gry dodane w 1.7.0 – domena Nexus Mods brana z definicji gry
+for (const g of require('../games').GAMES) if (g.nexus && !DOMAINS[g.id]) DOMAINS[g.id] = g.nexus;
 
 async function validate() { return get('/v1/users/validate.json'); }
 async function modInfo(domain, id) { return get(`/v1/games/${domain}/mods/${id}.json`); }

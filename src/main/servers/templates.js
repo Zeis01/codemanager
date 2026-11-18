@@ -10,6 +10,9 @@ const TEMPLATES = [
   { id: 'rust-oxide', type: 'rust', name: 'Rust + Oxide (uMod)', desc: 'Serwer Rust z Oxide – najpopularniejszy framework pluginów.', steps: [{ framework: 'oxide' }] },
   { id: 'rust-carbon', type: 'rust', name: 'Rust + Carbon', desc: 'Serwer Rust z Carbon – szybszy następca Oxide, zgodny z większością pluginów uMod.', steps: [{ framework: 'carbon' }] },
   { id: 'cs2-css', type: 'cs2', name: 'CS2 + Metamod + CounterStrikeSharp', desc: 'Serwer Counter-Strike 2 gotowy na pluginy CounterStrikeSharp.', steps: [{ framework: 'metamod2' }, { framework: 'counterstrikesharp' }] },
+  { id: 'l4d2-sourcemod', type: 'l4d2', name: 'L4D2 + Metamod + SourceMod', desc: 'Serwer Left 4 Dead 2 z SourceMod.', steps: [{ framework: 'metamod112' }, { framework: 'sourcemod' }] },
+  { id: 'unturned-rocket', type: 'unturned', name: 'Unturned + RocketMod', desc: 'Serwer Unturned z wbudowanym RocketMod.', steps: [{ framework: 'rocketmod' }] },
+  { id: 'unturned-openmod', type: 'unturned', name: 'Unturned + OpenMod', desc: 'Serwer Unturned z OpenMod.', steps: [{ framework: 'openmod' }] },
   { id: 'tf2-sourcemod', type: 'tf2', name: 'TF2 + Metamod + SourceMod', desc: 'Serwer Team Fortress 2 z SourceMod.', steps: [{ framework: 'metamod112' }, { framework: 'sourcemod' }] },
 ];
 
