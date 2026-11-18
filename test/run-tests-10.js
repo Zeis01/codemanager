@@ -82,8 +82,7 @@ t('kopie w chmurze: wykrywanie folderów, kopia, lista, przywracanie', async () 
   const db = path.join(root, 'Dropbox-x'); fs.mkdirSync(db); w(path.join(root, 'AppData', 'Dropbox', 'info.json'), JSON.stringify({ personal: { path: db } }));
   const prov = C.detectProviders({ env: { OneDrive: od, APPDATA: path.join(root, 'AppData') }, custom: path.join(root, 'nie-ma') });
   assert.deepStrictEqual(prov.map(p => p.id).slice(0, 2), ['onedrive', 'dropbox']);
-  const tar = (args) => new Promise((res, rej) => require('child_process').execFile('tar', args, e => (e ? rej(e) : res())));
-  const cb = new C.CloudBackup({ runTar: tar });
+  const cb = new C.CloudBackup({ runTar: args => require('../src/main/servers/scheduler').runTar(args) });
   const saves = path.join(root, 'saves'); w(path.join(saves, 'slot1.sav'), 'ZAPIS');
   const b = await cb.backup({ path: od }, 'skyrimse', { saves: [saves], profileCode: 'CM1:abc' }, { label: 'test' });
   assert(fs.existsSync(path.join(b.dir, 'saves-0.tar.gz')) && fs.existsSync(path.join(b.dir, 'profil-modow.txt')));
@@ -291,8 +290,9 @@ t('edytor bloczkowy: sprawdzanie połączeń i błędów, generowanie Lua/Python
   B.connect(g3, { node: st.id, pin: 'then' }, { node: set.id, pin: 'exec' }); B.connect(g3, { node: set.id, pin: 'then' }, { node: iff.id, pin: 'exec' }); B.connect(g3, { node: get.id, pin: 'value' }, { node: gt.id, pin: 'a' }); B.connect(g3, { node: gt.id, pin: 'out' }, { node: iff.id, pin: 'cond' }); B.connect(g3, { node: iff.id, pin: 'then' }, { node: yes.id, pin: 'exec' }); B.connect(g3, { node: iff.id, pin: 'else' }, { node: no.id, pin: 'exec' });
   assert.deepStrictEqual(B.validate(g3).filter(i => i.level === 'error'), []);
   const py = B.generate(g3).code; fs.writeFileSync(path.join(root, 'b.py'), py);
-  const res = require('child_process').spawnSync('python3', [path.join(root, 'b.py')], { encoding: 'utf8' });
-  if (!res.error) assert.strictEqual(res.stdout.trim(), 'dużo', py + res.stderr);
+  const cp = require('child_process');
+  const pyBin = ['python3', 'python', 'py'].find(b => { const v = cp.spawnSync(b, ['--version'], { encoding: 'utf8' }); return !v.error && v.status === 0 && /Python 3/.test(v.stdout + v.stderr); });
+  if (pyBin) { const res = cp.spawnSync(pyBin, [path.join(root, 'b.py')], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }); assert.strictEqual(res.stdout.trim(), 'dużo', py + res.stderr); }
   g3.target = 'js'; const js = B.generate(g3).code; fs.writeFileSync(path.join(root, 'b.js'), js);
   assert.strictEqual(require('child_process').spawnSync(process.execPath, [path.join(root, 'b.js')], { encoding: 'utf8' }).stdout.trim(), 'dużo', js);
   g3.target = 'lua'; g3.profile = 'lua'; const lua = B.generate(g3).code; assert(lua.includes('local punkty = 0') && lua.includes('if (punkty > 5) then'), lua);

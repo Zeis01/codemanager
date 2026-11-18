@@ -1,6 +1,7 @@
 // Git w edytorze: zmiany, porównanie z ostatnim commitem, commit, push/pull, historia, gałęzie.
 // Korzysta z programu git zainstalowanego w systemie (git-scm.com).
 'use strict';
+const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 
@@ -29,13 +30,16 @@ function parseStatus(out) {
   return { branch, upstream, ahead, behind, files };
 }
 async function status(dir) { const r = await root(dir); if (!r) return { repo: false }; return { repo: true, root: r, ...parseStatus(await git(['status', '--porcelain=v1', '-b', '-z', '-uall'], r)) }; }
-async function headContent(r, file) { const rel = path.relative(r, file).split(path.sep).join('/'); try { return await git(['show', 'HEAD:' + rel], r); } catch { return ''; } }
+// Windows: krótkie nazwy (RUNNER~1), wielkość liter dysku i ukośniki – ścieżki porównujemy po rozwinięciu
+const real = p => { try { return fs.realpathSync.native(p); } catch { const d = path.dirname(p); return d === p ? path.resolve(p) : path.join(real(d), path.basename(p)); } };
+const rel1 = (r, f) => path.relative(real(r), real(f)).split(path.sep).join('/');
+async function headContent(r, file) { const rel = rel1(r, file); try { return await git(['show', 'HEAD:' + rel], r); } catch { return ''; } }
 async function log(r, n = 60) {
   const out = await git(['log', `-n${n}`, '--date=relative', '--pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1e'], r).catch(() => '');
   return out.split('\x1e').map(l => l.trim()).filter(Boolean).map(l => { const [hash, short, author, date, subject] = l.split('\x1f'); return { hash, short, author, date, subject }; });
 }
 async function branches(r) { const out = await git(['branch', '--format=%(HEAD)%(refname:short)'], r).catch(() => ''); return out.split('\n').filter(Boolean).map(l => ({ name: l.slice(1), current: l[0] === '*' })); }
-const rels = (r, files) => files.map(f => path.relative(r, f).split(path.sep).join('/'));
+const rels = (r, files) => files.map(f => rel1(r, f));
 const api = {
   available, root, status, headContent, log, branches, parseStatus,
   init: dir => git(['init'], dir),
@@ -48,7 +52,7 @@ const api = {
   pull: r => git(['pull', '--ff-only'], r, { timeout: 180000 }),
   fetch: r => git(['fetch', '--prune'], r, { timeout: 120000 }),
   checkout: (r, branch, create) => git(create ? ['checkout', '-b', branch] : ['checkout', branch], r),
-  diffFile: (r, file, staged) => git(['diff', ...(staged ? ['--cached'] : []), '--', path.relative(r, file)], r),
+  diffFile: (r, file, staged) => git(['diff', ...(staged ? ['--cached'] : []), '--', rel1(r, file)], r),
   show: (r, hash) => git(['show', '--stat', '--format=%H%n%an <%ae>%n%ad%n%n%B', hash], r),
   remote: r => git(['remote', '-v'], r).then(o => o.split('\n').filter(Boolean)[0] || '').catch(() => ''),
   setRemote: (r, url) => git(['remote', 'add', 'origin', url], r).catch(() => git(['remote', 'set-url', 'origin', url], r)),
