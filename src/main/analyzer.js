@@ -239,4 +239,4 @@ async function fetchLog(input, fetchImpl = fetch) {
   return { url, text: text.length > 6 * 1024 * 1024 ? text.slice(-6 * 1024 * 1024) : text };
 }
 
-module.exports = { rawUrl, fetchLog, analyzeText, headline, summarizeReport, buildPackageIndex, blameFromStack, logCandidates, readTail, RULE_COUNT: () => R.length };
+module.exports = { addRule: rule, rawUrl, fetchLog, analyzeText, headline, summarizeReport, buildPackageIndex, blameFromStack, logCandidates, readTail, RULE_COUNT: () => R.length };

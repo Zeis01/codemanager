@@ -1,5 +1,77 @@
 # Historia zmian
 
+## CodeManager 1.8.0
+
+### Edytor bloczkowy (nowy widok)
+- **Łączenie bloczków jak w Blueprintach z Unreal Engine:** białe strzałki wyznaczają kolejność wykonywania, kolorowe kropki przenoszą dane (liczba, tekst, prawda/fałsz, gracz, lista, dowolny).
+- **Bloczki dla gier:** FiveM i RedM (komendy, wejście i wyjście gracza, zdarzenia sieciowe, czat, wyrzucanie, powiadomienia), Garry's Mod (hooki graczy, komendy czatu, zdrowie, broń) i BeamMP. Do tego przepływ (jeżeli, powtórz, dla każdego, dopóki, czekaj), zmienne, matematyka, porównania, logika, tekst i listy.
+- **Sprawdzanie połączeń na żywo:**
+  - podczas przeciągania pasujące piny świecą na zielono, a niepasujące gasną;
+  - dymek wyjaśnia, dlaczego połączenia nie da się zrobić (zły typ, przepływ z danymi, pętla danych, pole tylko na wpisaną wartość).
+- **Sprawdzanie całego schematu:** puste wejścia, bloczki z innej gry, zła strona skryptu (serwer/klient), niepodłączone akcje, nieużyte wyniki, dane z bloczka, który jeszcze się nie wykonał, pętle przepływu, kilka połączeń na jednym wejściu i brak zdarzenia startowego. Błędy są zaznaczone na bloczkach i pinach, a lista problemów przenosi do bloczka.
+- **Konwerter na kod tekstowy:**
+  - kod podgląda się na żywo w języku Lua (czysta, FiveM, RedM, Garry's Mod, BeamMP), Python albo JavaScript (Node.js);
+  - kod można zapisać do pliku albo otworzyć w edytorze.
+- **Obsługa:**
+  - zapis i odczyt schematów (.cmblocks), przykłady, cofnij/ponów;
+  - kopiuj/wklej i duplikowanie bloczków, menu pod prawym przyciskiem;
+  - po upuszczeniu połączenia na pustym miejscu pokazuje się lista pasujących bloczków;
+  - powiększanie kółkiem myszy i przyciągane do siatki przesuwanie.
+
+### Kreator botów Discord (nowy widok)
+- **Bot bez programowania:**
+  - komendy z ukośnikiem (z opcjami: tekst, liczba, użytkownik, kanał, rola) i komendy z prefiksem;
+  - uprawnienia: każdy, administratorzy albo osoby z rolą.
+- **Akcje:**
+  - wiadomości: odpowiedź, losowa odpowiedź, wiadomość na kanał, ramka (embed), wiadomość prywatna, reakcja, usunięcie wiadomości;
+  - moderacja: role, wyrzucenie, ban, wyciszenie;
+  - logika i dane: zmienne zapamiętywane między uruchomieniami, warunki „jeżeli / w przeciwnym razie”, czekanie, zapytania HTTP.
+- **Sterowanie serwerami gier z Discorda:**
+  - start, stop, restart, polecenie do konsoli, kopia zapasowa i status;
+  - zdarzenia: gracz wszedł lub wyszedł, serwer uruchomiony, zatrzymany albo po awarii, kopia gotowa.
+- **Szablony na start:** bot serwera gry, powitania, zabawa, moderacja.
+- **Wstawki w tekstach:** {user}, {option:nazwa}, {var:x}, {random:1-6}, {game.player} i inne.
+- **Działanie:**
+  - bot działa w CodeManagerze (własne połączenie z Discordem, log na żywo, automatyczny start);
+  - token jest szyfrowany;
+  - eksport do projektu discord.js pozwala uruchomić bota na hostingu.
+
+### Mody
+- **Wirtualny folder modów (jak Vortex / Mod Organizer):**
+  - każdy mod leży w osobnym magazynie, a do gry trafiają dowiązania;
+  - wyłączenie moda usuwa jego pliki bez kasowania;
+  - nadpisane pliki gry wracają same;
+  - kolejność (przeciąganie) decyduje o konfliktach plików;
+  - instalacje z Nexus Mods i archiwów trafiają do magazynu.
+- **„Co zepsuło grę?”:**
+  - CodeManager zapisuje listę modów przy każdym uruchomieniu;
+  - po crashu porównuje ją z ostatnim działającym uruchomieniem i wskazuje podejrzane mody (dodane, zaktualizowane, wymienione w raporcie crasha);
+  - podejrzany mod można wyłączyć jednym kliknięciem.
+- **Skaner bezpieczeństwa:**
+  - szuka m.in. fractureisera, backdoorów zasobów FiveM, kradzieży tokenów Discord i sesji Minecrafta, pobierania i uruchamiania kodu oraz zaciemnionych skryptów;
+  - skanuje automatycznie po każdej instalacji; pełny skan obejmuje mody gry i pluginy serwera.
+- **Kopie w chmurze:**
+  - zapisy gry, lista modów i opcjonalnie mody trafiają do folderu OneDrive, Dropboxa albo Dysku Google (lub dowolnego);
+  - kopia może się robić sama po każdej sesji gry;
+  - przywracanie działa także na innym komputerze.
+- **Optymalizator wydajności:**
+  - sprawdza sprzęt, plan zasilania, tryb gry i dysk;
+  - dla Minecrafta ustawia pamięć w launcherze oraz poleca i instaluje mody wydajnościowe dla Twojego loadera.
+
+### Serwery
+- **Panel webowy na telefon:** w tej samej sieci Wi-Fi panel pozwala uruchamiać, zatrzymywać i restartować serwery, czytać konsolę na żywo, wysyłać polecenia i robić kopie. Logowanie PIN-em z blokadą po błędnych próbach.
+- **Docker:** serwer może działać w kontenerze z limitem pamięci i procesora; pliki zostają w folderze serwera.
+- **Zaproszenia dla znajomych:**
+  - link codemanager:// albo kod zawiera adres serwera, hasło i listę modów;
+  - u znajomego CodeManager instaluje brakujące mody i łączy z serwerem (FiveM, RedM, MTA, Steam, lista serwerów Minecrafta).
+
+### Edytor kodu
+- **Serwery języka (LSP):** Lua (lua-language-server z funkcjami wybranego API gry), Python (Pyright), C# (csharp-ls) i Java (Eclipse JDT LS). Dają błędy na bieżąco, przejście do definicji, odwołania, zmianę nazwy w całym projekcie i formatowanie; C# i Java dostają też podpowiedzi i podpowiedzi parametrów. Instalacja jednym kliknięciem.
+- **Git:** panel zmian (przygotowanie, odrzucanie, porównanie z ostatnim commitem), commit, push i pull, gałęzie, historia; gałąź i liczba zmian widoczne na pasku stanu.
+
+### Wtyczki
+- Wtyczki z folderu wtyczek mogą dodawać obsługę gier, własne sprawdzanie modów, typy serwerów, reguły analizatora logów i polecenia. Włącza się je w Ustawieniach, gdzie jest też przykładowa wtyczka.
+
 ## CodeManager 1.7.1.5
 
 ### Edytor: podpowiedzi Lua dla gier

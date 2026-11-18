@@ -4,6 +4,7 @@ App.views = App.views || {};
 (function () {
   const { h, $, $$, icon, esc, api, toast, modal } = App;
   const P = () => window.cm.path;
+  const X = () => App.edExt || {};
   const S = {
     root: null, monaco: null, editor: null, el: null, tabs: [], active: null, side: 'explorer', expanded: new Set(), sel: null, loading: null, sideOpen: true,
   };
@@ -41,6 +42,7 @@ App.views = App.views || {};
         <button data-side="search" title="Szukaj w plikach (Ctrl+Shift+F)">${icon('search')}</button>
         <button data-side="places" title="Foldery gier i serwerów">${icon('layers')}</button>
         <button data-side="templates" title="Szablony plików">${icon('template')}</button>
+        <button data-side="git" title="Git – zmiany i commity">${icon('branch')}</button>
       </div>
       <div class="ed-side"></div>
       <div class="ed-main">
@@ -49,7 +51,7 @@ App.views = App.views || {};
         <div class="ed-host"><div class="ed-welcome"><div><h2>Edytor CodeManager</h2><p>Otwórz folder gry lub serwera, aby edytować pliki konfiguracyjne i skrypty.</p>
           <button class="btn primary" data-openfolder>${icon('folderOpen')}Otwórz folder</button>
           <div class="keys"><span class="kbd">Ctrl+S</span><span>Zapisz</span><span class="kbd">Ctrl+P</span><span>Szybkie otwieranie pliku</span><span class="kbd">Ctrl+Shift+F</span><span>Szukaj w plikach</span><span class="kbd">Ctrl+F / Ctrl+H</span><span>Znajdź / zamień</span><span class="kbd">Ctrl+Spacja</span><span>Podpowiedzi i snippety</span><span class="kbd">Alt+Shift+F</span><span>Formatuj (JSON)</span></div></div></div></div>
-        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><button data-st-diff title="Porównaj z wersją zapisaną na dysku">Porównaj</button><button data-st-tree title="Podgląd struktury pliku (JSON, TOML, YAML, INI)">Struktura</button><span data-st-prob></span><span data-st-pos></span><button data-st-luaapi class="hidden" title="Podpowiedzi Lua dla gry – kliknij, aby zmienić"></button><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
+        <div class="ed-status"><span data-st-file>Brak pliku</span><span class="grow"></span><button data-st-diff title="Porównaj z wersją zapisaną na dysku">Porównaj</button><button data-st-tree title="Podgląd struktury pliku (JSON, TOML, YAML, INI)">Struktura</button><span data-st-prob></span><span data-st-pos></span><button data-st-git class="hidden" title="Gałąź Git – kliknij, aby otworzyć panel Git"></button><button data-st-lsp class="hidden" title="Serwer języka"></button><button data-st-luaapi class="hidden" title="Podpowiedzi Lua dla gry – kliknij, aby zmienić"></button><button data-st-lang title="Zmień język"></button><span data-st-enc></span><span data-st-eol></span></div>
       </div></div>`);
     S.el = el;
     $$('[data-side]', el).forEach(b => b.onclick = () => { if (S.side === b.dataset.side && S.sideOpen) { S.sideOpen = false; } else { S.side = b.dataset.side; S.sideOpen = true; } renderSide(); });
@@ -74,6 +76,7 @@ App.views = App.views || {};
     if (S.side === 'search') sideSearch(side);
     if (S.side === 'places') sidePlaces(side);
     if (S.side === 'templates') sideTemplates(side);
+    if (X().sides && X().sides[S.side]) X().sides[S.side](side);
     setTimeout(() => S.editor && S.editor.layout(), 0);
   }
 
@@ -268,6 +271,7 @@ App.views = App.views || {};
     S.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => { S.side = 'search'; S.sideOpen = true; renderSide(); });
     S.editor.onDidChangeCursorPosition(e => { $('[data-st-pos]', S.el).textContent = `Wiersz ${e.position.lineNumber}, kol. ${e.position.column}`; });
     monaco.editor.onDidChangeMarkers(() => updateProblems());
+    if (X().editorReady) X().editorReady(monaco, S.editor);
     return S.editor;
   }
   function updateProblems() {
@@ -290,9 +294,10 @@ App.views = App.views || {};
       const model = S.monaco.editor.getModel(uri) || S.monaco.editor.createModel(data.content, lang, uri);
       model.setValue(data.content);
       t = { path, name: P().basename(path), model, bom: data.bom, eol: data.eol, saved: model.getAlternativeVersionId(), view: null, isNew: !!opts.create };
-      model.onDidChangeContent(() => { renderTabs(); validate(t); if (App.state.settings.editorAutosave) { clearTimeout(t.auto); t.auto = setTimeout(() => save(t), 1000); } });
+      model.onDidChangeContent(() => { renderTabs(); validate(t); if (X().changed) X().changed(t); if (App.state.settings.editorAutosave) { clearTimeout(t.auto); t.auto = setTimeout(() => save(t), 1000); } });
       validate(t, 0);
       S.tabs.push(t);
+      if (X().opened) X().opened(t);
     }
     activate(t);
     if (line) { S.editor.revealLineInCenter(line); S.editor.setPosition({ lineNumber: line, column: 1 }); }
@@ -338,6 +343,7 @@ App.views = App.views || {};
     }
     const i = S.tabs.indexOf(t);
     S.tabs.splice(i, 1);
+    if (X().closed) X().closed(t);
     t.model.dispose();
     if (S.active === t.path) {
       const next = S.tabs[i] || S.tabs[i - 1];
@@ -360,6 +366,7 @@ App.views = App.views || {};
     try { await App.apiQuiet('fs:writeFile', t.path, text, t.bom); } catch (e) { toast('Nie zapisano: ' + e.message, 'error'); return false; }
     t.saved = t.model.getAlternativeVersionId(); t.isNew = false;
     renderTabs(); updateStatus();
+    if (X().saved) X().saved(t);
     return true;
   }
   // ---------- walidacja TOML / YAML (parsery z procesu głównego) ----------
@@ -422,6 +429,7 @@ App.views = App.views || {};
     $('[data-st-file]', S.el).textContent = t ? (isDirty(t) ? '● ' : '') + t.name : 'Brak pliku';
     $('[data-st-lang]', S.el).textContent = t ? t.model.getLanguageId() : '';
     updateLuaApi(t);
+    if (X().status) X().status(t);
     $('[data-st-enc]', S.el).textContent = t ? (t.bom ? 'UTF-8 z BOM' : 'UTF-8') : '';
     $('[data-st-eol]', S.el).textContent = t ? t.eol : '';
     if (!t) { $('[data-st-pos]', S.el).textContent = ''; }
@@ -458,6 +466,7 @@ App.views = App.views || {};
   });
   window.addEventListener('beforeunload', e => { if (S.tabs.some(isDirty)) { e.returnValue = false; } });
 
+  App.ed = { S, openFile, openUntitled, renderSide, activate, ensureEditor, showDiff, save };
   App.views.editor = {
     full: true,
     crumb: () => '<b>Edytor</b>',

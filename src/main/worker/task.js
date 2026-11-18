@@ -7,7 +7,7 @@ const fs = require('fs');
 
 const ops = {
   check: ({ gameId, info, profile, settings }) => require('../compat').check(gameId, info, profile, settings),
-  detect: ({ config }) => require('../detect').detectAll(config),
+  detect: ({ config, pluginsDir }) => { if (pluginsDir) require('../plugins').registerDeclared(require('../games').GAMES, pluginsDir, (config.settings || {}).plugins || {}); return require('../detect').detectAll(config); },
   steamRoots: async ({ steamPath }) => ((await require('../detect').steamApps(steamPath)).roots || []),
   serverCheck: ({ server }) => require('../servers/check').check(server),
   conflicts: ({ game, mods, registry }) => require('../mods/conflicts').forGame(game, mods, registry),
@@ -33,6 +33,7 @@ const ops = {
   pkgIndex: ({ modsDir }) => require('../analyzer').buildPackageIndex(modsDir),
   syncMinecraft: ({ serverDir, clientDir }) => require('../servers/sync').compareMinecraft(serverDir, clientDir),
   syncThunder: ({ serverRoot, clientRoot }) => require('../servers/sync').compareThunderstore(serverRoot, clientRoot),
+  scan: ({ mods }) => require('../mods/scanner').scanMods(mods),
   ping: () => 'pong',
 };
 

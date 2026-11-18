@@ -143,6 +143,14 @@ class Monitor {
       const procs = process.platform === 'win32' ? await winProcs() : process.platform === 'linux' ? linuxProcs() : [];
       const now = Date.now(); const cores = os.cpus().length || 1;
       for (const [id, p] of running) {
+        const srv = (this.mgr.servers || []).find(x => x.id === id);
+        if (srv && srv.docker && srv.docker.enabled) {
+          // w Dockerze proces serwera działa w kontenerze – dane z docker stats
+          const ds = await require('./docker').stats(srv).catch(() => null); if (!ds) continue;
+          const point = { t: now, cpu: Math.round(ds.cpu / cores * 10) / 10, mem: Math.round(ds.memMB * 1048576), players: this.count(id) };
+          const h = this.st(id).history; h.push(point); if (h.length > this.keep) h.splice(0, h.length - this.keep);
+          this.emit('server:stats', { id, ...point }); this.checkAlarm(id, point); continue;
+        }
         const tot = treeTotals(procs, p.pid); if (!tot) continue;
         const prev = this.prev.get(id); this.prev.set(id, { t: now, cpuMs: tot.cpuMs });
         const cpu = prev && now > prev.t ? Math.max(0, Math.min(100, ((tot.cpuMs - prev.cpuMs) / (now - prev.t)) * 100 / cores)) : null;

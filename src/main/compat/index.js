@@ -103,6 +103,7 @@ function check(gameId, info, profile, settings = {}) {
     case 'hollowknight': return G4.checkHollowKnight(ctx);
     case 'assetto': return G4.checkAssetto(ctx);
   }
+  if (String(game.checker).startsWith('plugin:')) { const fn = require('../plugins').checker(game.checker); if (fn) return fn(ctx); return G3.checkFiles({ ...ctx, nexusInstalls: settings.__nexus || [] }); }
   throw new Error('Brak sprawdzania dla tej gry');
 }
 

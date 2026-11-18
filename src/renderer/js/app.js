@@ -9,6 +9,8 @@
     { id: 'updates', label: 'Aktualizacje modów', icon: 'update', count: () => (App.state.modUpdates ? { v: String(App.state.modUpdates), live: true } : '') },
     { id: 'analyzer', label: 'Analizator błędów', icon: 'pulse' },
     { id: 'editor', label: 'Edytor', icon: 'code' },
+    { id: 'blocks', label: 'Edytor bloczkowy', icon: 'blocks' },
+    { id: 'bots', label: 'Boty Discord', icon: 'bot', count: () => (App.state.botsOnline ? { v: App.state.botsOnline + ' online', live: true } : '') },
     { id: 'rcon', label: 'RCON', icon: 'terminal' },
     { id: 'installers', label: 'Instalatory', icon: 'download' },
     { id: 'settings', label: 'Ustawienia', icon: 'settings' },
@@ -39,6 +41,7 @@
     if (App.leaveGuard && !App.leaveGuard()) return;
     App.leaveGuard = null;
     if (current === 'editor' && id !== 'editor' && App.views.editor.leave) App.views.editor.leave();
+    if (App._cleanup) { try { App._cleanup(); } catch { /* */ } App._cleanup = null; }
     current = id; currentParams = params;
     const main = $('#main');
     const view = App.views[id];

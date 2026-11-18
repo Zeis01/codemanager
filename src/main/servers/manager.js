@@ -116,8 +116,9 @@ class ServerManager {
   start(id) {
     const s = this.get(id); const t = TYPES[s.type];
     if (this.procs.has(id)) throw new Error('Serwer już działa');
-    const st = t.start(s);
+    let st = t.start(s);
     if (!U.exists(st.cmd) && path.isAbsolute(st.cmd)) throw new Error('Nie znaleziono pliku serwera: ' + st.cmd + ' – zainstaluj serwer lub wybierz Aktualizuj.');
+    if (s.docker && s.docker.enabled) { st = require('./docker').buildRun(s, st, require('./ports').portsFor(s)); this.log(id, `Docker: obraz ${require('./docker').imageFor(s)}${s.docker.memory ? `, RAM ${s.docker.memory} MB` : ''}${s.docker.cpus ? `, CPU ${s.docker.cpus}` : ''}`); }
     this.log(id, `=== Start: ${path.basename(st.cmd)} ${st.args.join(' ')} ===`);
     const p = spawn(st.cmd, st.args, { cwd: st.cwd, env: { ...process.env, ...(st.env || {}) }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     this.procs.set(id, p); this.setStatus(id, 'running');
@@ -175,6 +176,8 @@ class ServerManager {
   kill(id) {
     this.stopRequested.add(id);
     const p = this.procs.get(id); if (!p) return false;
+    const s = this.servers.find(x => x.id === id);
+    if (s && s.docker && s.docker.enabled) spawn('docker', ['kill', require('./docker').containerName(s)], { windowsHide: true }).on('error', () => {});
     if (U.isWin) spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true }); else p.kill('SIGKILL');
     return true;
   }
