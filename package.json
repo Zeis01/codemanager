@@ -1,7 +1,7 @@
 {
   "name": "codemanager",
   "productName": "CodeManager",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "CodeManager – menedżer modów, serwerów i edytor dla gier",
   "main": "src/main/main.js",
   "author": "CodeManager",
@@ -92,7 +92,7 @@
     "releaseInfo": {
       "releaseName": "CodeManager ${version}"
     },
-    "buildVersion": "1.9.0"
+    "buildVersion": "1.9.1"
   },
   "repository": {
     "type": "git",

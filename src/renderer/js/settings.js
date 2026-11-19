@@ -76,6 +76,9 @@ App.views.settings = {
           <div class="field" data-aibasef><label>Adres serwera (zgodny z OpenAI)</label><input class="input mono" data-aib placeholder="http://localhost:11434/v1"></div>
         </div>
         <div class="row"><button class="btn primary" data-aisave>${icon('save')}Zapisz</button><button class="btn" data-aitest>${icon('pulse')}Sprawdź połączenie</button><button class="btn ghost danger" data-aidel>Usuń klucz</button><span class="dim" style="font-size:12.5px" data-aires></span></div>
+        <h3 style="margin:22px 0 4px">Klucze wszystkich dostawców</h3>
+        <p class="dim" style="font-size:12.5px;margin:0 0 10px">Zapisz klucze kilku dostawców naraz – w asystencie AI w edytorze przełączasz się między nimi bez wracania tutaj. Możesz też wkleić wszystkie klucze jednym ruchem (np. zawartość pliku <span class="mono">.env</span>) – CodeManager sam rozpozna, który klucz do kogo należy.</p>
+        <div data-keys></div>
       </div>`;
     const drawThemes = () => {
       const box = $('[data-themes]', el); box.innerHTML = '';
@@ -221,6 +224,45 @@ App.views.settings = {
     $('[data-aimodels]', el).onclick = async () => { try { await aiSave(); const list = await window.cm.call('ai:models'); $('#ai-models').innerHTML = list.map(m => `<option value="${esc(m)}">`).join(''); toast(`Dostępne modele: ${list.length} – wybierz z listy w polu Model`); } catch (err) { toast(err.message, 'warn', 7000); } };
     await drawAi();
     if (params.section === 'workshop') setTimeout(() => $('#set-workshop', el).scrollIntoView({ behavior: 'smooth' }), 100);
+    // ---------- wiele kluczy naraz ----------
+    const drawKeys = async () => {
+      const box = $('[data-keys]', el); const st = await api('ai:status');
+      const list = provs.filter(p => p.needsKey);
+      box.innerHTML = `<div class="keys-paste"><textarea class="input mono" rows="3" data-kpaste placeholder="Wklej klucze – każdy w osobnym wierszu albo w formacie .env:\nANTHROPIC_API_KEY=sk-ant-…\nOPENAI_API_KEY=sk-…\nAIza…   gsk_…   sk-or-…"></textarea>
+          <div class="row" style="margin-top:6px"><button class="btn sm" data-kdetect>${icon('search')}Rozpoznaj klucze</button><button class="btn sm" data-kenv>${icon('file')}Wczytaj z pliku .env</button><span class="dim" style="font-size:12px" data-kinfo></span></div></div>
+        <div class="keys-table">${list.map(p => `<div class="key-row" data-p="${p.id}"><div class="kn"><b>${esc(p.name)}</b><span class="dim" data-kst>${st.keys[p.id] ? '<span class="chip ok">zapisany</span>' : 'brak klucza'}</span></div>
+          <div class="inline-input"><input class="input mono" type="password" data-kv placeholder="${st.keys[p.id] ? '•••••••• (wpisz nowy, aby zmienić)' : 'wklej klucz'}" autocomplete="off" spellcheck="false"><button class="btn ghost icon" data-kshow title="Pokaż / ukryj">${icon('search')}</button>${p.keyUrl ? `<button class="btn ghost icon" data-kurl="${esc(p.keyUrl)}" title="Strona z kluczami">${icon('globe')}</button>` : ''}<button class="btn ghost" data-ktest ${st.keys[p.id] ? '' : 'disabled'} title="Sprawdź zapisany klucz">Test</button>${st.keys[p.id] ? `<button class="btn ghost icon danger" data-kdel title="Usuń klucz">${icon('trash')}</button>` : ''}</div><span class="hint" data-kres></span></div>`).join('')}</div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" data-ksave>${icon('save')}Zapisz wszystkie klucze</button><button class="btn" data-ktestall>${icon('pulse')}Sprawdź wszystkie zapisane</button><span class="grow"></span></div>
+        <label class="check" style="margin-top:12px"><input type="checkbox" data-kcli ${App.state.settings.aiKeysToCli ? 'checked' : ''}><span>Przekazuj zapisane klucze agentom w edytorze (Claude Code, Codex CLI, Gemini CLI, Aider) jako zmienne środowiskowe</span></label>
+        <p class="dim" style="font-size:12px;margin:4px 0 0 22px">Bez tej opcji agenci używają własnego logowania (np. subskrypcji). Z nią korzystają z kluczy API – opłaty naliczane są wtedy za zużycie API.</p>`;
+      const row = id => $(`.key-row[data-p="${id}"]`, box);
+      const fill = r => {
+        if (!r) return;
+        for (const f of r.found) { const rw = row(f.provider); if (rw) { $('[data-kv]', rw).value = f.key; rw.classList.add('filled'); $('[data-kres]', rw).textContent = `rozpoznano (${f.source === 'prefiks' ? 'po początku klucza' : f.source})`; } }
+        $('[data-kinfo]', box).textContent = r.found.length ? `Rozpoznano: ${r.found.length}${r.unknown.length ? ` · nierozpoznane: ${r.unknown.join(', ')}` : ''}. Sprawdź i kliknij „Zapisz wszystkie klucze”.` : `Nie rozpoznano żadnego klucza${r.unknown.length ? ` (nierozpoznane: ${r.unknown.join(', ')} – wklej je w odpowiednie pole albo dodaj nazwę zmiennej, np. MISTRAL_API_KEY=…)` : ''}.`;
+      };
+      $('[data-kdetect]', box).onclick = async () => fill(await api('ai:detectKeys', $('[data-kpaste]', box).value));
+      $('[data-kpaste]', box).onpaste = () => setTimeout(async () => fill(await api('ai:detectKeys', $('[data-kpaste]', box).value)), 30);
+      $('[data-kenv]', box).onclick = async () => fill(await api('ai:readEnv'));
+      $$('[data-kshow]', box).forEach(b => b.onclick = () => { const i = $('[data-kv]', b.closest('.key-row')); i.type = i.type === 'password' ? 'text' : 'password'; });
+      $$('[data-kurl]', box).forEach(b => b.onclick = () => api('shell:external', b.dataset.kurl));
+      const test = async id => { const rw = row(id); const res = $('[data-kres]', rw); res.className = 'hint'; res.textContent = 'Łączenie…'; try { const r = await window.cm.call('ai:testKey', id); res.className = 'hint ok-text'; res.textContent = `✔ działa (${r.model}, ${(r.ms / 1000).toFixed(1)} s)`; return true; } catch (e) { res.className = 'hint err'; res.textContent = '✖ ' + e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); return false; } };
+      $$('[data-ktest]', box).forEach(b => b.onclick = () => test(b.closest('.key-row').dataset.p));
+      $$('[data-kdel]', box).forEach(b => b.onclick = async () => { const id = b.closest('.key-row').dataset.p; await api('ai:setKeys', { [id]: '' }); toast('Usunięto klucz'); drawKeys(); drawAi(); });
+      $('[data-ksave]', box).onclick = async () => {
+        const map = {}; $$('.key-row', box).forEach(rw => { const v = $('[data-kv]', rw).value.trim(); if (v) map[rw.dataset.p] = v; });
+        if (!Object.keys(map).length) { toast('Wpisz albo wklej co najmniej jeden klucz', 'warn'); return; }
+        const r = await api('ai:setKeys', map); App.state.settings.ai = (await api('config:get')).settings.ai;
+        toast(`Zapisano klucze: ${r.changed.length}`); $('[data-kpaste]', box).value = '';
+        await drawKeys(); await drawAi();
+        for (const id of r.changed) test(id);
+      };
+      $('[data-ktestall]', box).onclick = async () => { const ids = list.filter(p => st.keys[p.id]).map(p => p.id); if (!ids.length) { toast('Brak zapisanych kluczy', 'warn'); return; } const ok = (await Promise.all(ids.map(test))).filter(Boolean).length; toast(`Działa ${ok} z ${ids.length} kluczy`, ok === ids.length ? 'ok' : 'warn'); };
+      $('[data-kcli]', box).onchange = async e => { App.state.settings.aiKeysToCli = e.target.checked; await api('settings:set', { aiKeysToCli: e.target.checked }); toast(e.target.checked ? 'Agenci dostaną zapisane klucze' : 'Agenci użyją własnego logowania'); };
+    };
+    drawKeys();
+    const origDel = $('[data-aidel]', el).onclick; $('[data-aidel]', el).onclick = async () => { await origDel(); drawKeys(); };
+    const origSave = $('[data-aisave]', el).onclick; $('[data-aisave]', el).onclick = async () => { await origSave(); drawKeys(); };
     if (params.section === 'ai') setTimeout(() => $('#set-ai', el).scrollIntoView({ behavior: 'smooth' }), 100);
     async function save() {
       const patch = {};

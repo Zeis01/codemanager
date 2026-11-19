@@ -1,5 +1,19 @@
 # Historia zmian
 
+## CodeManager 1.9.1
+
+### Sztuczna inteligencja
+- **Klucze wielu dostawców naraz (Ustawienia → Sztuczna inteligencja):**
+  - nowa sekcja z polem na klucz dla każdego dostawcy (Claude, ChatGPT, Gemini, OpenRouter, Mistral, DeepSeek, Groq, xAI);
+  - zapisanie wszystkich jednym przyciskiem, a po zapisaniu automatyczny test każdego klucza.
+- **Wklejanie wielu kluczy jednocześnie:**
+  - klucze można wkleić w formacie .env (`ANTHROPIC_API_KEY=…`, także `export …` i `$env:…`) albo same – CodeManager rozpozna dostawcę po początku klucza (`sk-ant-`, `sk-or-`, `AIza`, `gsk_`, `xai-`…);
+  - klucze można też wczytać z pliku .env.
+- **Test i usuwanie** pojedynczych kluczy oraz przycisk „Sprawdź wszystkie zapisane”.
+- **Opcjonalne przekazywanie zapisanych kluczy agentom w edytorze** (Claude Code, Codex CLI, Gemini CLI, Aider) jako zmiennych środowiskowych.
+- Asystent AI w edytorze widzi nowe klucze od razu, bez ponownego uruchamiania.
+- Czytelniejszy komunikat, gdy nie ma połączenia z serwerem dostawcy AI.
+
 ## CodeManager 1.9.0
 
 ### Asystent AI w edytorze

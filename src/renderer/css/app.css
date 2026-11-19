@@ -929,3 +929,13 @@ iframe.webmap { width: 100%; height: 60vh; border: 1px solid var(--line); border
 .monaco-editor .dbg-bp { background: var(--error); border-radius: 50%; width: 10px !important; height: 10px !important; margin: 4px 0 0 6px; }
 .monaco-editor .dbg-arrow::before { content: '▶'; color: var(--warn); font-size: 12px; margin-left: 5px; }
 .monaco-editor .dbg-line { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+
+/* 1.9.1: wiele kluczy AI */
+.keys-paste textarea { resize: vertical; font-size: 12px; }
+.keys-table { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 8px; margin-top: 12px; }
+.key-row { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg1); display: flex; flex-direction: column; gap: 6px; }
+.key-row.filled { border-color: var(--accent); }
+.key-row .kn { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.key-row .inline-input .input { height: 28px; font-size: 12px; }
+.key-row .btn { height: 28px; }
+.hint.ok-text { color: var(--accent); } .hint.err { color: var(--error); }

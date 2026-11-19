@@ -1653,3 +1653,32 @@ handle('assistant:send', async (session, opts) => {
 handle('assistant:cancel', s => { assistant.cancel(s); for (const [id, res] of approvals) { res(false); approvals.delete(id); } return true; });
 handle('assistant:reset', s => { assistant.reset(s); return true; });
 handle('assistant:approval', (id, ok) => { const r = approvals.get(id); if (r) { approvals.delete(id); r(!!ok); } return true; });
+
+// ---------- wiele kluczy AI naraz ----------
+function setAiKey(id, key) {
+  config.settings.aiKeys = config.settings.aiKeys || {};
+  if (key) config.settings.aiKeys[id] = (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(String(key).trim()) : Buffer.from(String(key).trim(), 'utf8')).toString('base64');
+  else delete config.settings.aiKeys[id];
+}
+handle('ai:setKeys', map => {
+  const changed = [];
+  for (const [id, key] of Object.entries(map || {})) { if (!ai.PROVIDERS[id] || !ai.PROVIDERS[id].needsKey || key === undefined || key === null) continue; setAiKey(id, key); changed.push(id); }
+  // bez wybranego dostawcy – ustaw pierwszego z kluczem, żeby AI od razu działało
+  const cur = config.settings.ai || {};
+  if (!cur.provider) { const first = changed.find(id => map[id]); if (first) config.settings.ai = { ...cur, provider: first, enabled: true }; }
+  saveConfig(); return { changed, ready: aiReady() };
+});
+handle('ai:detectKeys', text => ai.detectKeys(text));
+handle('ai:readEnv', async () => { const f = (await dialog.showOpenDialog(win, { title: 'Plik z kluczami (.env)', properties: ['openFile', 'showHiddenFiles'] })).filePaths[0]; if (!f) return null; const st = fs.statSync(f); if (st.size > 512 * 1024) throw new Error('Plik jest za duży.'); return ai.detectKeys(fs.readFileSync(f, 'utf8')); });
+handle('ai:testKey', async id => {
+  const { c, key } = aiProviderCfg(id); if (!c) throw new Error('Nieznany dostawca');
+  const t0 = Date.now(); const r = await ai.chat(c, key, { system: 'Odpowiadaj jednym słowem.', messages: [{ role: 'user', content: 'Napisz „OK”.' }], maxTokens: 10 });
+  return { ok: true, ms: Date.now() - t0, model: c.model, reply: r };
+});
+// zapisane klucze dla agentów CLI (Claude Code, Codex, Gemini CLI, Aider) – tylko gdy użytkownik włączy
+function aiKeysEnv() {
+  if (!config.settings.aiKeysToCli) return {};
+  const env = {}; for (const [id, name] of Object.entries(ai.ENV_FOR)) { const k = aiKey(id); if (k && name) env[name] = k; }
+  return env;
+}
+assistant.extraEnv = aiKeysEnv;

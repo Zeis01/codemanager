@@ -37,6 +37,7 @@ async function http(fetchImpl, url, opts, timeout = 120000) {
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('AI nie odpowiedziało w ciągu 2 minut.');
     if (/fetch failed|ECONNREFUSED/i.test(e.message) && /localhost|127\.0\.0\.1/.test(url)) throw new Error('Brak połączenia z lokalnym serwerem AI (czy Ollama jest uruchomiona?).');
+    if (/fetch failed|ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(e.message)) { let host = url; try { host = new URL(url).host; } catch { /* */ } throw new Error(`Brak połączenia z ${host} – sprawdź internet, zaporę albo proxy.`); }
     throw e;
   } finally { clearTimeout(t); }
 }
@@ -125,4 +126,31 @@ Mody:
 ${modsBlock(report.mods || [], 9000)}`;
 }
 
-module.exports = { PROVIDERS, cfg, chat, models, system, logPrompt, modsPrompt, logExcerpt };
+
+// ---------- rozpoznawanie kluczy (wiele naraz: plik .env albo same klucze) ----------
+const ENV_NAMES = { ANTHROPIC_API_KEY: 'anthropic', CLAUDE_API_KEY: 'anthropic', OPENAI_API_KEY: 'openai', GEMINI_API_KEY: 'gemini', GOOGLE_API_KEY: 'gemini', GOOGLE_GENERATIVE_AI_API_KEY: 'gemini', OPENROUTER_API_KEY: 'openrouter', MISTRAL_API_KEY: 'mistral', DEEPSEEK_API_KEY: 'deepseek', GROQ_API_KEY: 'groq', XAI_API_KEY: 'xai', GROK_API_KEY: 'xai' };
+const ENV_FOR = Object.fromEntries(['anthropic', 'openai', 'gemini', 'openrouter', 'mistral', 'deepseek', 'groq', 'xai'].map(id => [id, Object.keys(ENV_NAMES).find(k => ENV_NAMES[k] === id)]));
+function guessProvider(key) {
+  if (/^sk-ant-/.test(key)) return 'anthropic';
+  if (/^sk-or-/.test(key)) return 'openrouter';
+  if (/^AIza[\w-]{30,}$/.test(key)) return 'gemini';
+  if (/^gsk_/.test(key)) return 'groq';
+  if (/^xai-/.test(key)) return 'xai';
+  if (/^sk-[0-9a-f]{32}$/.test(key)) return 'deepseek';
+  if (/^sk-(proj-|svcacct-|admin-)?[\w-]{20,}$/.test(key)) return 'openai';
+  return null;
+}
+// zwraca { found: [{ provider, key, source }], unknown: [fragment] }
+function detectKeys(text) {
+  const found = []; const unknown = [];
+  const add = (provider, key, source) => { if (!found.some(f => f.provider === provider)) found.push({ provider, key, source }); else { const f = found.find(x => x.provider === provider); if (f.source === 'prefiks' && source !== 'prefiks') Object.assign(f, { key, source }); } };
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || line.startsWith('#')) continue;
+    const m = line.match(/^(?:export\s+|set\s+|\$env:)?([A-Z][A-Z0-9_]*)\s*[=:]\s*["']?([^"'\s]+)["']?/);
+    if (m) { const p = ENV_NAMES[m[1]] || (/KEY|TOKEN/.test(m[1]) ? guessProvider(m[2]) : null); if (p) add(p, m[2], m[1]); else if (/KEY|TOKEN/.test(m[1])) unknown.push(m[1]); continue; }
+    for (const tok of line.split(/[\s,;|]+/)) { const k = tok.replace(/^["'`]+|["'`]+$/g, ''); if (k.length < 20) continue; const p = guessProvider(k); if (p) add(p, k, 'prefiks'); else if (/^[\w-]{30,}$/.test(k)) unknown.push(k.slice(0, 6) + '…'); }
+  }
+  return { found, unknown };
+}
+
+module.exports = { detectKeys, guessProvider, ENV_NAMES, ENV_FOR, PROVIDERS, cfg, chat, models, system, logPrompt, modsPrompt, logExcerpt };

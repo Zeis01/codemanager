@@ -173,7 +173,8 @@ const CLI = {
 function which(bin) {
   return new Promise(res => execFile(U.isWin ? 'where' : 'which', [bin], { windowsHide: true, timeout: 5000 }, (e, out) => res(e ? null : String(out).split(/\r?\n/).map(s => s.trim()).filter(Boolean).sort((a, b) => (/\.(cmd|exe)$/i.test(b) - /\.(cmd|exe)$/i.test(a)))[0] || null)));
 }
-async function detectCli() { const out = {}; for (const [id, a] of Object.entries(CLI)) { const p = await which(a.bin); out[id] = { name: a.name, installed: !!p, path: p, url: a.url }; } return out; }
+let cliCache = null;
+async function detectCli() { if (cliCache && Date.now() - cliCache.t < 30000) return cliCache.v; const out = {}; for (const [id, a] of Object.entries(CLI)) { const p = await which(a.bin); out[id] = { name: a.name, installed: !!p, path: p, url: a.url }; } cliCache = { t: Date.now(), v: out }; return out; }
 // wiersz stream-json z Claude Code → tekst / krok
 function parseClaudeLine(line) {
   let j; try { j = JSON.parse(line); } catch { return { text: line + '\n' }; }
@@ -247,7 +248,7 @@ class Assistant {
       if (!a.stdin) { promptFile = path.join(os.tmpdir(), `cm-agent-${Date.now()}.txt`); fs.writeFileSync(promptFile, prompt); }
       const args = a.args({ allowEdits, resume: s.claudeSession, promptFile });
       const isCmd = U.isWin && /\.(cmd|bat)$/i.test(bin);
-      const p = this.spawnImpl(isCmd ? 'cmd.exe' : bin, isCmd ? ['/d', '/s', '/c', bin, ...args] : args, { cwd, windowsHide: true, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb' } });
+      const p = this.spawnImpl(isCmd ? 'cmd.exe' : bin, isCmd ? ['/d', '/s', '/c', bin, ...args] : args, { cwd, windowsHide: true, env: { ...process.env, ...(this.extraEnv ? this.extraEnv() : {}), NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb' } });
       s.proc = p;
       let out = ''; let buf = ''; let err = ''; let errMsg = null;
       const onLine = line => {

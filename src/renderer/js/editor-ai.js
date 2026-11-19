@@ -41,7 +41,7 @@
 
   async function side(box) {
     A.side = box;
-    const pr = await loadProviders();
+    const pr = await loadProviders(true);
     if (!A.provider || (!pr.api.some(p => p.id === A.provider && p.ready) && !(pr.cli[A.provider] || {}).installed)) A.provider = (pr.api.find(p => p.id === pr.current && p.ready) || pr.api.find(p => p.ready) || {}).id || Object.keys(pr.cli).find(k => pr.cli[k].installed) || null;
     const cur = pr.api.find(p => p.id === A.provider);
     box.innerHTML = `<div class="side-head"><span>Asystent AI</span><button class="btn ghost sm icon" data-new title="Nowa rozmowa">${icon('plus')}</button><button class="btn ghost sm icon" data-set title="Klucze API i dostawcy">${icon('settings')}</button></div>

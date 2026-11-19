@@ -210,6 +210,22 @@ t('asystent: agenci CLI (Claude Code – zdarzenia stream-json, wznawianie rozmo
   } finally { process.env.PATH = oldPath; }
 });
 
+t('klucze AI: rozpoznawanie wielu kluczy z .env i po początku klucza', () => {
+  const ai = require('../src/main/ai');
+  // fałszywe klucze składane w trakcie testu (żeby skanery sekretów nie brały ich za prawdziwe)
+  const rnd = (n, abc = 'abcdefghijklmnopqrstuvwxyz0123456789') => Array.from({ length: n }, (_, i) => abc[(i * 7 + 3) % abc.length]).join('');
+  const K = { anthropic: ['sk', 'ant', 'api03', rnd(26)].join('-'), openai: ['sk', 'proj', rnd(23)].join('-'), mistral: rnd(32), gemini: 'AI' + 'za' + rnd(35), groq: 'gs' + 'k_' + rnd(30), openrouter: ['sk', 'or', 'v1', rnd(28)].join('-'), xai: 'xa' + 'i-' + rnd(24), deepseek: 'sk-' + rnd(32, '0123456789abcdef') };
+  const text = ['# moje klucze', `${'ANTHROPIC'}_API_KEY=${K.anthropic}`, `export ${'OPENAI'}_API_KEY="${K.openai}"`, `$env:${'MISTRAL'}_API_KEY = "${K.mistral}"`, `${K.gemini}, ${K.groq}`, K.openrouter, K.xai, K.deepseek, 'INNY_TOKEN=zzz', 'nieznany-klucz-bardzo-dlugi-' + rnd(20)].join('\n');
+  const r = ai.detectKeys(text);
+  const by = Object.fromEntries(r.found.map(f => [f.provider, f]));
+  assert.deepStrictEqual(Object.keys(by).sort(), ['anthropic', 'deepseek', 'gemini', 'groq', 'mistral', 'openai', 'openrouter', 'xai']);
+  for (const [p, k] of Object.entries(K)) assert.strictEqual(by[p].key, k, p);
+  assert.strictEqual(by.openai.source, 'OPENAI_API_KEY'); assert.strictEqual(by.gemini.source, 'prefiks');
+  assert.strictEqual(r.unknown.length, 2);
+  assert.strictEqual(ai.guessProvider(K.anthropic), 'anthropic'); assert.strictEqual(ai.guessProvider('krotki'), null);
+  assert.strictEqual(ai.ENV_FOR.gemini, 'GEMINI_API_KEY'); assert.strictEqual(ai.ENV_FOR.anthropic, 'ANTHROPIC_API_KEY');
+});
+
 (async () => {
   for (const [n, f] of queue) { try { await f(); passed++; console.log('  ✔ ' + n); } catch (e) { failed++; console.log('  ✖ ' + n + '\n    ' + String(e.stack).split('\n').slice(0, 5).join('\n    ')); } }
   fs.rmSync(root, { recursive: true, force: true });
