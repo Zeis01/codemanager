@@ -3,6 +3,11 @@
 window.App = window.App || {};
 
 const ICONS = {
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
+  stepover: '<path d="M4 12a8 8 0 0 1 15-3.5M19 4v5h-5"/><circle cx="12" cy="18" r="2"/>',
+  stepin: '<path d="M12 3v11m0 0-4-4m4 4 4-4"/><circle cx="12" cy="19" r="2"/>',
+  stepout: '<path d="M12 15V4m0 0L8 8m4-4 4 4"/><circle cx="12" cy="19" r="2"/>',
+  pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
   branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-12 7"/>',
   bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5M2 13v3M22 13v3"/>',
   blocks: '<rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/><path d="M10 7h3a2 2 0 0 1 2 2v5"/><circle cx="15" cy="14" r=".6"/>',

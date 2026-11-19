@@ -64,7 +64,7 @@ app.on('second-instance', (_e, argv) => { const u = argv.find(a => /^nxm:\/\//i.
 app.on('open-url', (e, u) => { e.preventDefault(); if (/^nxm:/i.test(u)) handleNxm(u); if (/^codemanager:/i.test(u)) emit('invite:open', { link: u }); });
 app.whenReady().then(() => { createWindow(); const u = process.argv.find(a => /^nxm:\/\//i.test(a)); if (u) setTimeout(() => handleNxm(u), 3000); const inv = process.argv.find(a => /^codemanager:\/\//i.test(a)); if (inv) setTimeout(() => emit('invite:open', { link: inv }), 3500); });
 app.on('window-all-closed', () => { if (config.settings.tray && tray && !app.isQuitting) return; servers.stopAll(); rcon.closeAll(); app.quit(); });
-app.on('before-quit', () => { app.isQuitting = true; try { pool.close(); } catch { /* */ } try { lsp.stopAll(); bots.stopAll(); webPanel.stop(); } catch { /* */ } servers.stopAll(); try { rcon.closeAll(); } catch { /* */ } });
+app.on('before-quit', () => { app.isQuitting = true; try { pool.close(); } catch { /* */ } try { lsp.stopAll(); bots.stopAll(); webPanel.stop(); tunnels.stopAll(); debugMgr.stop(); hotReload.closeAll(); } catch { /* */ } servers.stopAll(); try { rcon.closeAll(); } catch { /* */ } });
 
 // ---------- bezpieczne opakowanie handlerów ----------
 function handle(ch, fn) {
@@ -198,7 +198,7 @@ handle('fs:readFile', p => {
   let t = buf.toString('utf8'); const bom = t.charCodeAt(0) === 0xfeff; if (bom) t = t.slice(1);
   return { content: t, bom, eol: t.includes('\r\n') ? 'CRLF' : 'LF', size: st.size, mtime: st.mtimeMs };
 });
-handle('fs:writeFile', (p, content, bom) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, (bom ? '﻿' : '') + content, 'utf8'); return fs.statSync(p).mtimeMs; });
+handle('fs:writeFile', (p, content, bom) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, (bom ? '﻿' : '') + content, 'utf8'); try { if (global.cmHotReload) global.cmHotReload.changed(p); } catch { /* */ } return fs.statSync(p).mtimeMs; });
 handle('fs:mkdir', p => { fs.mkdirSync(p, { recursive: true }); return true; });
 handle('fs:rename', (a, b) => { fs.renameSync(a, b); return b; });
 handle('fs:trash', async p => { await shell.trashItem(p); return true; });
@@ -1578,3 +1578,78 @@ handle('plugins:folder', () => { fs.mkdirSync(pluginsDir, { recursive: true }); 
 handle('plugins:commands', () => plugins.allCommands());
 handle('plugins:run', (pluginId, cmdId) => plugins.runCommand(pluginId, cmdId, { app: 'CodeManager', servers: servers.list(), detected }));
 handle('app:restart', () => { app.relaunch(); app.exit(0); });
+
+// =====================================================================
+// Wersja 1.9.0: tunel bez przekierowania portów, asystent AI w edytorze, hot reload, debugger
+// =====================================================================
+// ---------- tunel ----------
+const { TunnelManager, vpnInfo } = require('./servers/tunnel');
+const tunnels = new TunnelManager({ userData, net: N, emit, enc: encSecret, dec: decSecret, getSettings: () => config.settings, saveSettings: saveConfig, log: (id, line) => { try { servers.log(id, line); } catch { /* */ } } });
+handle('tunnel:status', () => tunnels.status());
+handle('tunnel:install', (jobId, provider) => tunnels.install(provider, { log: jobLog(jobId), progress: jobProg(jobId) }));
+handle('tunnel:link', () => tunnels.linkPlayit(u => shell.openExternal(u)));
+handle('tunnel:unlink', () => { tunnels.unlinkPlayit(); return true; });
+handle('tunnel:start', (id, provider) => { const s = servers.get(id); if (servers.status.get(id) !== 'running') throw new Error('Najpierw uruchom serwer.'); s.tunnel = { provider, auto: true }; servers.save(); return tunnels.start(s, provider, require('./servers/ports').portsFor(s)); });
+handle('tunnel:stop', id => { const s = servers.get(id); if (s.tunnel) { s.tunnel.auto = false; servers.save(); } tunnels.stop(id); return true; });
+handle('tunnel:vpn', () => vpnInfo());
+
+// ---------- hot reload ----------
+const { HotReloader } = require('./servers/hotreload');
+const hotReload = new HotReloader({
+  servers: () => servers.list(), getServer: id => servers.get(id), isRunning: id => servers.status.get(id) === 'running',
+  send: (id, cmd) => servers.command(id, cmd), log: (id, line) => servers.log(id, line), emit: (ch, d) => emit('hotreload', d), enabled: s => s.hotReload !== false,
+});
+global.cmHotReload = hotReload;
+handle('servers:hotReload', (id, on) => { const s = servers.get(id); s.hotReload = !!on; servers.save(); if (on && servers.status.get(id) === 'running') hotReload.watch(id); else hotReload.unwatch(id); return s.hotReload; });
+{
+  const prev = servers.onEvent;
+  servers.onEvent = (kind, s, data) => {
+    if (prev) prev(kind, s, data);
+    if (kind === 'start') { hotReload.watch(s.id); if (s.tunnel && s.tunnel.auto) setTimeout(() => { try { tunnels.start(servers.get(s.id), s.tunnel.provider, require('./servers/ports').portsFor(s)); } catch (e) { servers.log(s.id, '✖ tunel: ' + e.message); } }, 3000); }
+    if (kind === 'stop' || kind === 'crash') { hotReload.unwatch(s.id); tunnels.stop(s.id); }
+  };
+}
+
+// ---------- debugger ----------
+const { DebugManager } = require('./editor/debugger');
+const debugMgr = new DebugManager({ emit, pyIntel, run: U.run });
+handle('debug:status', () => debugMgr.status());
+handle('debug:pythonStatus', () => debugMgr.pythonStatus());
+handle('debug:installDebugpy', jobId => debugMgr.installDebugpy(jobLog(jobId)));
+handle('debug:start', o => debugMgr.start(o).catch(e => { if (e.code === 'NO_DEBUGPY') throw new Error('NO_DEBUGPY: ' + e.message); throw e; }));
+handle('debug:stop', () => { debugMgr.stop(); return true; });
+handle('debug:cmd', a => debugMgr.cmd(a));
+handle('debug:breakpoints', (file, lines) => debugMgr.setBreakpoints(file, lines));
+handle('debug:scopes', f => debugMgr.scopes(f));
+handle('debug:variables', r => debugMgr.variables(r));
+handle('debug:evaluate', (e, f) => debugMgr.evaluate(e, f));
+
+// ---------- asystent AI w edytorze ----------
+const { Assistant, detectCli } = require('./editor/assistant');
+const approvals = new Map(); let approvalSeq = 0;
+function aiProviderCfg(id, model) {
+  const p = ai.PROVIDERS[id]; if (!p) return { c: null, key: null };
+  const cur = config.settings.ai || {};
+  const c = { id, ...p, model: model || (config.settings.aiModels || {})[id] || (cur.provider === id ? cur.model : '') || p.model, base: ((cur.provider === id && cur.baseUrl) || p.base || '').replace(/\/+$/, '') };
+  return { c, key: aiKey(id) };
+}
+const assistant = new Assistant({
+  getProvider: aiProviderCfg, emit, servers: { list: () => servers.list(), getLog: id => servers.getLog(id) }, lang: aiLang,
+  approve: req => new Promise(res => { const id = ++approvalSeq; approvals.set(id, res); emit('assistant:approve', { id, session: req.session, file: req.file, rel: req.rel, before: req.before, after: req.after }); }),
+  onWrite: f => { emit('assistant:written', { file: f }); try { hotReload.changed(f); } catch { /* */ } },
+});
+handle('assistant:providers', async () => {
+  const cur = config.settings.ai || {};
+  const api = Object.entries(ai.PROVIDERS).filter(([id]) => id !== 'custom' || cur.provider === 'custom').map(([id, p]) => { const { c, key } = aiProviderCfg(id); return { id, name: p.name, model: c.model, ready: (!p.needsKey || !!key) && !!c.base, needsKey: p.needsKey, local: !p.needsKey }; });
+  return { api, cli: await detectCli(), current: cur.provider || null };
+});
+handle('assistant:models', async id => { const { c, key } = aiProviderCfg(id); return ai.models(c, key); });
+handle('assistant:setModel', (id, model) => { config.settings.aiModels = { ...(config.settings.aiModels || {}), [id]: model || undefined }; saveConfig(); return true; });
+handle('assistant:send', async (session, opts) => {
+  if (!ai.PROVIDERS[opts.provider] && !require('./editor/assistant').CLI[opts.provider]) throw new Error('Wybierz dostawcę AI albo agenta.');
+  if (ai.PROVIDERS[opts.provider]) { const { c, key } = aiProviderCfg(opts.provider, opts.model); if (!c.model) { const list = await ai.models(c, key).catch(() => []); if (list[0]) opts.model = list[0]; else throw new Error('Wpisz nazwę modelu (np. llama3.1) albo uruchom model w programie.'); } }
+  return assistant.send(session, opts);
+});
+handle('assistant:cancel', s => { assistant.cancel(s); for (const [id, res] of approvals) { res(false); approvals.delete(id); } return true; });
+handle('assistant:reset', s => { assistant.reset(s); return true; });
+handle('assistant:approval', (id, ok) => { const r = approvals.get(id); if (r) { approvals.delete(id); r(!!ok); } return true; });

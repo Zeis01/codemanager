@@ -1,14 +1,14 @@
 {
   "name": "codemanager",
   "productName": "CodeManager",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "CodeManager – menedżer modów, serwerów i edytor dla gier",
   "main": "src/main/main.js",
   "author": "CodeManager",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "test": "node test/run-tests.js && node test/run-tests-2.js && node test/run-tests-3.js && node test/run-tests-4.js && node test/run-tests-5.js && node test/run-tests-6.js && node test/run-tests-7.js && node test/run-tests-8.js && node test/run-tests-9.js && node test/run-tests-10.js",
+    "test": "node test/run-tests.js && node test/run-tests-2.js && node test/run-tests-3.js && node test/run-tests-4.js && node test/run-tests-5.js && node test/run-tests-6.js && node test/run-tests-7.js && node test/run-tests-8.js && node test/run-tests-9.js && node test/run-tests-10.js && node test/run-tests-11.js",
     "dist": "electron-builder --win nsis portable zip --publish never",
     "dist:dir": "electron-builder --win dir",
     "release": "electron-builder --win nsis portable zip --publish always"
@@ -18,6 +18,7 @@
     "7zip-bin": "^5.2.0",
     "adm-zip": "^0.5.16",
     "electron-updater": "^6.8.11",
+    "fengari": "^0.1.5",
     "monaco-editor": "^0.52.2",
     "ws": "^8.23.0",
     "yaml": "^2.6.1"
@@ -91,7 +92,7 @@
     "releaseInfo": {
       "releaseName": "CodeManager ${version}"
     },
-    "buildVersion": "1.8.1"
+    "buildVersion": "1.9.0"
   },
   "repository": {
     "type": "git",

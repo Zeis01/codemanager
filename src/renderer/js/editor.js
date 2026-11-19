@@ -43,6 +43,8 @@ App.views = App.views || {};
         <button data-side="places" title="Foldery gier i serwerów">${icon('layers')}</button>
         <button data-side="templates" title="Szablony plików">${icon('template')}</button>
         <button data-side="git" title="Git – zmiany i commity">${icon('branch')}</button>
+        <button data-side="debug" title="Debugowanie (F5)">${icon('bug')}</button>
+        <button data-side="ai" title="Asystent AI (Ctrl+I)">${icon('sparkle')}</button>
       </div>
       <div class="ed-side"></div>
       <div class="ed-main">
@@ -466,7 +468,7 @@ App.views = App.views || {};
   });
   window.addEventListener('beforeunload', e => { if (S.tabs.some(isDirty)) { e.returnValue = false; } });
 
-  App.ed = { S, openFile, openUntitled, renderSide, activate, ensureEditor, showDiff, save };
+  App.ed = { S, openFile, openUntitled, renderSide, renderTabs, activate, ensureEditor, showDiff, save };
   App.views.editor = {
     full: true,
     crumb: () => '<b>Edytor</b>',

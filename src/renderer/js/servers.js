@@ -319,6 +319,7 @@ App.views = App.views || {};
       modal({ title: `Usunąć serwer „${s.name}”?`, body: `<p class="muted" style="margin-top:0">Serwer zniknie z listy CodeManager.</p><label class="check"><input type="checkbox" data-files><span>Przenieś też folder serwera do kosza<br><span class="path">${esc(s.path)}</span></span></label>`,
         actions: [{ label: 'Anuluj' }, { label: 'Usuń serwer', danger: true, onClick: async ({ body }) => { await api('servers:remove', s.id, $('[data-files]', body).checked); toast('Usunięto serwer'); App.go('servers'); } }] });
     };
+    if (App.st.extraSettings) App.st.extraSettings(c, s, t);
   }
 
 

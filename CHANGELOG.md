@@ -1,5 +1,40 @@
 # Historia zmian
 
+## CodeManager 1.9.0
+
+### Asystent AI w edytorze
+- **Panel „Asystent AI” w edytorze (Ctrl+I):** rozmowa o kodzie otwartego pliku i zaznaczenia, z widocznymi błędami edytora i API gry (FiveM, Garry's Mod…).
+- **Wybór modelu:** Claude (Anthropic), ChatGPT (OpenAI), Gemini, OpenRouter, Mistral, DeepSeek, Groq, xAI Grok oraz lokalne Ollama i LM Studio. Klucze ustawia się raz w Ustawieniach → Sztuczna inteligencja; model można zmienić w panelu.
+- **Tryb agenta:**
+  - asystent sam przegląda pliki projektu, szuka w nich, czyta błędy edytora i konsolę uruchomionego serwera gry;
+  - każdą zmianę w pliku pokazuje jako podgląd różnic do zatwierdzenia albo – jeśli tak ustawisz – zapisuje od razu;
+  - nie wychodzi poza folder projektu;
+  - otwarte pliki odświeżają się po zapisie, a na działającym serwerze od razu przeładowuje się zmieniony zasób.
+- **Zewnętrzni agenci:** Claude Code, OpenAI Codex CLI, Gemini CLI i Aider, jeśli są zainstalowane. Działają w folderze projektu, ich postęp widać na żywo, a zmiany plików wymagają zgody (przełącznik). Rozmowa z Claude Code jest kontynuowana między wiadomościami.
+- **Bloki kodu w odpowiedziach:** przyciski „Wstaw”, „Zastąp” (zaznaczenie), „Nowy” (plik), „Kopiuj”.
+- **Szybkie akcje:** wyjaśnij kod, napraw błędy w pliku, dodaj komentarze, sprawdź log serwera; także w menu pod prawym przyciskiem.
+
+### Debugger w edytorze
+- **Python** (przez debugpy – CodeManager zainstaluje go jednym kliknięciem) i **Lua** (wbudowana maszyna Lua 5.3, bez instalowania niczego).
+- **Punkty zatrzymania:** kliknięcie na marginesie obok numeru wiersza albo F9; zapamiętywane i przesuwane razem z tekstem.
+- **Sterowanie:** kontynuuj (F5), przejdź dalej (F10), wejdź do funkcji (F11), wyjdź z funkcji (Shift+F11), wstrzymaj, zatrzymaj (Shift+F5).
+- **Podgląd:** zmienne lokalne, zewnętrzne i globalne z rozwijaniem tablic i obiektów, stos wywołań z przechodzeniem między ramkami, konsola z wyjściem programu i obliczaniem wyrażeń w zatrzymanym miejscu.
+
+### Serwery
+- **Tunel bez przekierowania portów (zakładka Sieć):**
+  - znajomi wchodzą przez publiczny adres tunelu, bez ustawiania routera;
+  - **bore.pub** działa bez konta (TCP – Minecraft, Terraria), **playit.gg** obsługuje TCP i UDP (gry Steam, FiveM, Valheim, Rust) – darmowe konto łączy się raz przez przeglądarkę, a tunele zakładają się same;
+  - tunel startuje i zatrzymuje się razem z serwerem;
+  - adres tunelu trafia od razu do zaproszeń dla znajomych;
+  - CodeManager pokazuje też adres z Tailscale/ZeroTier, jeśli są zainstalowane.
+- **Gorące przeładowanie skryptów:** po zapisaniu pliku (w edytorze albo innym programem) działający serwer przeładowuje zmieniony zasób bez restartu:
+  - FiveM/RedM: `ensure zasób`;
+  - MTA: `restart zasób`;
+  - Minecraft: `/reload` dla paczek danych i `plugman reload` dla nowego .jar;
+  - SourceMod: `sm plugins reload`;
+  - Oxide: przeładowanie po zmianie konfiguracji;
+  - włączane i wyłączane w ustawieniach serwera.
+
 ## CodeManager 1.8.1
 
 ### Mody

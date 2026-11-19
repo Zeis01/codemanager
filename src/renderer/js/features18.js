@@ -237,7 +237,7 @@
     let mode = 'new';
     const m = modal({ title: 'Zaproś znajomych', wide: true, body, actions: [{ label: 'Zamknij' }, { label: 'Utwórz zaproszenie', primary: true, icon: 'link', onClick: async ({ button }) => {
       if (mode === 'have') { const v = $('[data-code]', body).value.trim(); if (!v) return false; m.close(); inviteOpen(v); return; }
-      const port = s && s.port; let addr = $('[data-a]', body).value.trim(); if (addr && port && !/:\d+$/.test(addr)) addr += ':' + port;
+      const port = s && s.port; let addr = $('[data-a]', body).value.trim(); if (addr && port && !/:\d+$/.test(addr) && !/joinmc\.link|ply\.gg|playit/i.test(addr)) addr += ':' + port;
       const r = await api('invite:create', { gameId, profileId: opts.profileId, serverId: s && s.id, serverName: $('[data-n]', body).value.trim(), address: addr, password: $('[data-pw]', body).value, message: $('[data-m]', body).value.trim(), withMods: !!($('[data-mods]', body) || {}).checked, from: App.state.settings.inviteName || '' });
       $('[data-out]', body).innerHTML = `<div class="invite-out"><div class="field"><label>Link (kliknięcie otwiera CodeManager u znajomego)</label><div class="inline-input"><input class="input mono" readonly value="${esc(r.link)}"><button class="btn" data-cp="link">Kopiuj</button></div></div><div class="field"><label>Kod do wklejenia (gdy link się nie otwiera, np. na Discordzie)</label><div class="inline-input"><input class="input mono" readonly value="${esc(r.code)}"><button class="btn" data-cp="code">Kopiuj</button></div></div><p class="dim" style="font-size:12.5px;margin:0">Znajomy potrzebuje CodeManagera. Bez niego niech wejdzie na serwer ręcznie: <span class="mono">${esc(addr || '—')}</span>.</p></div>`;
       $$('[data-cp]', body).forEach(b => b.onclick = () => copy(b.dataset.cp === 'link' ? r.link : r.code, 'Skopiowano zaproszenie'));
@@ -245,6 +245,8 @@
       return false;
     } }] });
     $$('[data-it]', body).forEach(b => b.onclick = () => { mode = b.dataset.it; $$('[data-it]', body).forEach(x => x.classList.toggle('active', x === b)); $('[data-pane=new]', body).classList.toggle('hidden', mode !== 'new'); $('[data-pane=have]', body).classList.toggle('hidden', mode !== 'have'); $('footer .btn.primary', m.el).lastChild.textContent = mode === 'new' ? 'Utwórz zaproszenie' : 'Otwórz zaproszenie'; });
+    if (opts.address) $('[data-a]', body).value = opts.address;
+    else if (s) App.apiQuiet('tunnel:status').then(t => { const a = t.active[s.id]; if (a && a.addresses[0] && !$('[data-a]', body).value) { $('[data-a]', body).value = a.addresses[0].address; toast('Wstawiono adres tunelu'); } }).catch(() => {});
     $('[data-ip]', body).onclick = async () => { const ip = await App.apiQuiet('net:publicIp').catch(() => null); if (!ip) { toast('Nie udało się ustalić publicznego IP', 'warn'); return; } $('[data-a]', body).value = ip + (s && s.port ? ':' + s.port : ''); };
   }
   async function inviteOpen(link) {

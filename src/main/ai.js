@@ -8,7 +8,11 @@ const PROVIDERS = {
   gemini: { name: 'Google Gemini', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-2.5-flash', needsKey: true, keyUrl: 'https://aistudio.google.com/apikey' },
   openrouter: { name: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1', model: 'openrouter/auto', needsKey: true, keyUrl: 'https://openrouter.ai/keys' },
   mistral: { name: 'Mistral AI', kind: 'openai', base: 'https://api.mistral.ai/v1', model: 'mistral-small-latest', needsKey: true, keyUrl: 'https://console.mistral.ai/api-keys' },
+  deepseek: { name: 'DeepSeek', kind: 'openai', base: 'https://api.deepseek.com/v1', model: 'deepseek-chat', needsKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },
+  groq: { name: 'Groq', kind: 'openai', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', needsKey: true, keyUrl: 'https://console.groq.com/keys' },
+  xai: { name: 'xAI (Grok)', kind: 'openai', base: 'https://api.x.ai/v1', model: 'grok-3-mini', needsKey: true, keyUrl: 'https://console.x.ai' },
   ollama: { name: 'Ollama (lokalnie, bez klucza)', kind: 'openai', base: 'http://localhost:11434/v1', model: 'llama3.1', needsKey: false, keyUrl: 'https://ollama.com/download' },
+  lmstudio: { name: 'LM Studio (lokalnie, bez klucza)', kind: 'openai', base: 'http://localhost:1234/v1', model: '', needsKey: false, keyUrl: 'https://lmstudio.ai' },
   custom: { name: 'Własny (zgodny z OpenAI)', kind: 'openai', base: '', model: '', needsKey: false, keyUrl: null },
 };
 
